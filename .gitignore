@@ -41,3 +41,11 @@ example
 # generated native folders
 /ios
 /android
+
+# graphify generated output
+graphify-out/
+
+# dev server logs
+expo-web.log
+expo-web.error.log
+*.error.log
