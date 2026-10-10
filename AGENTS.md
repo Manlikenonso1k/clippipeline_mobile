@@ -34,6 +34,15 @@ Run lint and typecheck before declaring any task done.
 Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
 Docs: https://docs.expo.dev/eas/index.md
 
+## Designs — Google Stitch (MCP)
+
+UI designs for this app come from **Google Stitch** via its MCP server. When a task involves building or changing a screen or component, pull the design from Stitch first and implement to match it — don't invent layouts from scratch.
+
+- The server is configured in `.mcp.json` as `stitch` (HTTP transport). It authenticates with the `X-Goog-Api-Key` header, whose value is read from the `STITCH_API_KEY` environment variable.
+- The key lives in `.env.local` (gitignored). **Never hardcode the key** in `.mcp.json`, `app.json`, source, or this file. To make the MCP host pick it up, export it in your shell before launching, e.g. `export STITCH_API_KEY=...` (macOS/Linux) or `$env:STITCH_API_KEY = '...'` (PowerShell).
+- Translate Stitch output into the existing stack: Expo Router screens in `src/app/`, reusable components outside it, and Expo/React Native primitives. Keep the design's spacing, color, and type tokens but adapt to mobile-first, cross-platform patterns.
+- Reconnect/verify the `stitch` MCP server in an interactive session if its tools aren't available (`/mcp`).
+
 ## Rules
 
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.

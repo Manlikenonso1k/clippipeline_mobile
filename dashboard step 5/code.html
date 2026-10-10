@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "secondary-container": "#8401d2", "error": "#ffb4ab", "on-secondary-fixed-variant": "#6c00ae", "inverse-primary": "#603ce2", "platform-youtube": "#FF0000", "tertiary-fixed": "#ffdcc4", "border": "#2A2A36", "on-secondary-fixed": "#2e004e", "tertiary-container": "#d7791f", "on-secondary": "#4c007c", "on-primary-container": "#2a0088", "on-tertiary": "#4e2600", "platform-tiktok-red": "#FE2C55", "secondary": "#e1b6ff", "platform-instagram-mid": "#DD2A7B", "on-error-container": "#ffdad6", "platform-instagram-start": "#F58529", "secondary-fixed": "#f2daff", "surface-dim": "#131317", "inverse-on-surface": "#303034", "surface-container-low": "#1b1b1f", "on-surface": "#e4e1e7", "surface-tint": "#cabeff", "primary": "#cabeff", "outline-variant": "#484555", "surface-raised": "#1E1E28", "status-warning": "#FF9F43", "surface-bright": "#39393d", "primary-fixed": "#e6deff", "on-tertiary-container": "#442000", "on-primary-fixed-variant": "#4816cb", "outline": "#938ea1", "surface-container-highest": "#353439", "tertiary": "#ffb780", "status-danger": "#EA5455", "primary-fixed-dim": "#cabeff", "tertiary-fixed-dim": "#ffb780", "text-secondary": "#A1A1AE", "surface-variant": "#353439", "on-error": "#690005", "surface-container": "#1f1f23", "on-tertiary-fixed-variant": "#6f3800", "platform-instagram-end": "#8134AF", "surface-container-high": "#2a292e", "secondary-fixed-dim": "#e1b6ff", "on-primary": "#31009a", "platform-tiktok-cyan": "#00F2EA", "surface": "#16161D", "background": "#131317", "on-background": "#e4e1e7", "surface-container-lowest": "#0e0e12", "status-success": "#28C76F", "text-primary": "#FFFFFF", "inverse-surface": "#e4e1e7", "on-surface-variant": "#c9c4d8", "on-primary-fixed": "#1c0062", "error-container": "#93000a", "on-tertiary-fixed": "#2f1400", "primary-container": "#947dff", "on-secondary-container": "#e5bfff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-xl": "1.5rem", "space-lg": "1.25rem", "space-md": "1rem", "space-xs": "0.25rem", "space-sm": "0.5rem", "gutter": "1rem", "margin": "1rem" }, "fontFamily": { "headline-md": ["Inter"], "label-sm": ["Inter"], "stat-xl": ["Inter"], "display": ["Inter"], "caption": ["Inter"], "body-lg": ["Inter"], "label-md": ["Inter"], "body-md": ["Inter"], "stat-lg": ["Inter"], "headline-lg": ["Inter"] }, "fontSize": { "headline-md": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }], "stat-xl": ["36px", { "lineHeight": "42px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "display": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "caption": ["13px", { "lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "500" }], "body-lg": ["16px", { "lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400" }], "label-md": ["14px", { "lineHeight": "18px", "letterSpacing": "0.01em", "fontWeight": "600" }], "body-md": ["15px", { "lineHeight": "22px", "letterSpacing": "0em", "fontWeight": "400" }], "stat-lg": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-lg": ["24px", { "lineHeight": "30px", "letterSpacing": "-0.015em", "fontWeight": "700" }] } } } };</script><style>@layer base{html,body{width:100%;margin:0;padding:0;background-color:#131317;color:#e4e1e7;}body{overscroll-behavior:none;font-family:'Inter',sans-serif;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style></head><body class="bg-background flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.4)]"><div class="h-16 px-gutter flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="w-9 h-9 rounded-xl bg-primary-container flex items-center justify-center text-text-primary shadow-[0_2px_12px_rgba(148,125,255,0.35)]"><span class="material-symbols-outlined text-[20px]">auto_videocam</span></div><span class="font-headline-md text-headline-md text-text-primary tracking-tight">Home</span></div><div class="flex items-center gap-space-sm"><button aria-label="Notifications" class="w-11 h-11 rounded-full flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors"><span class="material-symbols-outlined text-[22px]">notifications</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex flex-col relative w-full pt-16 pb-24 bg-surface min-h-screen"><div class="flex flex-col w-full px-gutter pb-8 gap-space-lg">
+<!-- Creator Greeting & Sync Badge Card -->
+<section class="flex items-center justify-between pt-1">
+<div class="flex items-center gap-space-md">
+<div class="relative w-12 h-12">
+<img alt="Alex's Avatar" class="w-12 h-12 rounded-full object-cover shadow-[0_4px_16px_rgba(0,0,0,0.5)]" data-alt="Modern close-up portrait of creative director Alex smiling warmly in dark studio ambient lighting with electric violet and cyan rim light highlights, shot on 85mm lens with shallow depth of field, high-fidelity sharp portraiture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD05nthWKn36NBvj5vUwBxW_v7q2cGEXrWGS8TuQQK-uheJKVzk7YLL6T4qnrqUeEA9CINgZP-ub9WLuuNsvRfHqkMBlAzAv-Ftgs32saNCEnteIJQJEkvkQeuNJTWcD22bfI5XQLJt0VvAmU9wMbHhg9EO0pC704BwIDjlGogbx-nwGkW_AafINQlWYEZxuYrsm_LTdeK5Fvp7p4Hgm9MRs15G6lXN3r8d0bcQtvDC6kQMWoC_mQdqnA"/>
+<span class="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-status-success ring-2 ring-surface flex items-center justify-center">
+<span class="w-1.5 h-1.5 rounded-full bg-surface"></span>
+</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<h1 class="font-headline-md text-headline-md text-text-primary tracking-tight">Good morning, Alex</h1>
+<span class="inline-block transform origin-bottom hover:rotate-12 transition-transform cursor-default text-[17px]">👋</span>
+</div>
+<p class="font-caption text-caption text-text-secondary tracking-normal">@alexcreates • Pro Tier</p>
+</div>
+</div>
+<!-- Quick Status Pill -->
+<div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high shadow-sm">
+<span class="w-2 h-2 rounded-full bg-status-success animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-on-surface">Auto-sync active</span>
+</div>
+</section>
+<!-- Key Metrics 2x2 Bento Grid -->
+<section aria-label="Key Performance Metrics" class="grid grid-cols-2 gap-space-sm">
+<!-- Stat 1: Total Views -->
+<div class="flex flex-col p-4 rounded-xl bg-surface-container shadow-sm gap-2">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-text-secondary">Total Views</span>
+<div class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-status-success/15 text-status-success font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[13px]">arrow_upward</span>
+<span>14.2%</span>
+</div>
+</div>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="font-stat-lg text-stat-lg text-text-primary font-bold tracking-tight">2.4M</span>
+<span class="font-caption text-caption text-text-secondary">views</span>
+</div>
+</div>
+<!-- Stat 2: Total Likes -->
+<div class="flex flex-col p-4 rounded-xl bg-surface-container shadow-sm gap-2">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-text-secondary">Total Likes</span>
+<div class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-status-success/15 text-status-success font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[13px]">arrow_upward</span>
+<span>8.5%</span>
+</div>
+</div>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="font-stat-lg text-stat-lg text-text-primary font-bold tracking-tight">385K</span>
+<span class="font-caption text-caption text-text-secondary">likes</span>
+</div>
+</div>
+<!-- Stat 3: Posts Published -->
+<div class="flex flex-col p-4 rounded-xl bg-surface-container shadow-sm gap-2">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-text-secondary">Published</span>
+<span class="material-symbols-outlined text-[18px] text-text-secondary">electric_bolt</span>
+</div>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="font-stat-lg text-stat-lg text-text-primary font-bold tracking-tight">48</span>
+<span class="font-caption text-caption text-text-secondary">clips</span>
+</div>
+</div>
+<!-- Stat 4: Connected Accounts -->
+<div class="flex flex-col p-4 rounded-xl bg-surface-container shadow-sm gap-2">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-text-secondary">Connected</span>
+<div class="flex items-center -space-x-1">
+<span class="w-3.5 h-3.5 rounded-full bg-platform-tiktok-cyan flex items-center justify-center"></span>
+<span class="w-3.5 h-3.5 rounded-full bg-platform-youtube flex items-center justify-center"></span>
+<span class="w-3.5 h-3.5 rounded-full bg-platform-instagram-mid flex items-center justify-center"></span>
+</div>
+</div>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="font-stat-lg text-stat-lg text-text-primary font-bold tracking-tight">3 of 3</span>
+<span class="font-caption text-caption text-text-secondary">hubs</span>
+</div>
+</div>
+</section>
+<!-- Performance Visual Area Chart -->
+<section class="flex flex-col p-space-lg rounded-xl bg-surface-container shadow-md">
+<div class="flex items-start justify-between mb-4">
+<div>
+<h2 class="font-headline-md text-headline-md text-text-primary">Performance</h2>
+<p class="font-caption text-caption text-text-secondary mt-0.5">Aggregated multi-platform reach</p>
+</div>
+<!-- Time Range Toggle Pills -->
+<div class="flex items-center p-0.5 bg-surface-container-high rounded-full" id="range-toggle" role="tablist">
+<button class="px-2.5 py-1 rounded-full font-label-sm text-label-sm text-text-secondary transition-colors hover:text-text-primary" onclick="setChartRange('7d', this)" type="button">7d</button>
+<button class="px-2.5 py-1 rounded-full font-label-sm text-label-sm bg-primary-container text-text-primary shadow-sm transition-all" onclick="setChartRange('30d', this)" type="button">30d</button>
+<button class="px-2.5 py-1 rounded-full font-label-sm text-label-sm text-text-secondary transition-colors hover:text-text-primary" onclick="setChartRange('90d', this)" type="button">90d</button>
+</div>
+</div>
+<!-- Interactive Glowing Area Chart -->
+<div class="relative w-full h-44 mt-1 select-none">
+<!-- Tooltip Crosshair Callout -->
+<div class="absolute top-2 right-14 z-10 flex flex-col items-center pointer-events-none transform -translate-x-1/2">
+<div class="px-2.5 py-1 rounded-lg bg-surface-raised shadow-lg flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-ping"></span>
+<span class="font-caption text-caption text-text-primary font-semibold">Oct 24 • 142.5K views</span>
+</div>
+<div class="w-0.5 h-3 bg-surface-raised"></div>
+</div>
+<!-- SVG Chart Canvas -->
+<svg class="w-full h-full overflow-visible" fill="none" viewbox="0 0 340 160" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<lineargradient gradientunits="userSpaceOnUse" id="violetGradient" x1="0" x2="0" y1="0" y2="160">
+<stop offset="0%" stop-color="#947dff" stop-opacity="0.45"></stop>
+<stop offset="65%" stop-color="#8401d2" stop-opacity="0.12"></stop>
+<stop offset="100%" stop-color="#1f1f23" stop-opacity="0"></stop>
+</lineargradient>
+<filter height="140%" id="lineGlow" width="140%" x="-20%" y="-20%">
+<fedropshadow dx="0" dy="4" flood-color="#cabeff" flood-opacity="0.4" stddeviation="6"></fedropshadow>
+</filter>
+</defs>
+<!-- Subtle horizontal grid lines -->
+<line opacity="0.4" stroke="#353439" stroke-dasharray="3 4" stroke-width="0.75" x1="0" x2="340" y1="35" y2="35"></line>
+<line opacity="0.4" stroke="#353439" stroke-dasharray="3 4" stroke-width="0.75" x1="0" x2="340" y1="80" y2="80"></line>
+<line opacity="0.4" stroke="#353439" stroke-dasharray="3 4" stroke-width="0.75" x1="0" x2="340" y1="125" y2="125"></line>
+<!-- Vertical Guide Line for Highlight Date -->
+<line opacity="0.5" stroke="#cabeff" stroke-dasharray="2 2" stroke-width="1" x1="240" x2="240" y1="15" y2="155"></line>
+<!-- Filled Area -->
+<path d="M0,135 C30,130 50,110 80,105 C110,100 130,115 160,85 C190,55 210,65 240,24 C270,55 310,40 340,30 L340,160 L0,160 Z" fill="url(#violetGradient)"></path>
+<!-- Glowing Stroke Path -->
+<path d="M0,135 C30,130 50,110 80,105 C110,100 130,115 160,85 C190,55 210,65 240,24 C270,55 310,40 340,30" filter="url(#lineGlow)" stroke="#cabeff" stroke-linecap="round" stroke-width="2.5"></path>
+<!-- High-point Focal Ring -->
+<circle cx="240" cy="24" fill="#131317" r="5" stroke="#cabeff" stroke-width="2.5"></circle>
+<circle cx="240" cy="24" fill="#FFFFFF" r="2"></circle>
+</svg>
+<!-- Horizontal Days Axis Labels -->
+<div class="flex justify-between items-center px-1 pt-2 font-label-sm text-label-sm text-text-secondary/70">
+<span>Oct 01</span>
+<span>Oct 08</span>
+<span>Oct 16</span>
+<span class="text-primary font-semibold">Oct 24</span>
+<span>Oct 30</span>
+</div>
+</div>
+</section>
+<!-- Top Posts Section -->
+<section class="flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<h2 class="font-headline-md text-headline-md text-text-primary">Top Posts</h2>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high font-label-sm text-label-sm text-text-secondary">3 active</span>
+</div>
+<button aria-label="View all published posts" class="font-label-sm text-label-sm text-primary hover:text-primary-fixed transition-colors flex items-center gap-0.5">
+<span>View all</span>
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+<!-- Card 1 -->
+<article class="flex flex-col p-4 rounded-xl bg-surface-container shadow-md gap-3">
+<div class="flex gap-3">
+<!-- 9:16 Video Preview -->
+<div class="relative w-20 h-28 flex-shrink-0 rounded-lg overflow-hidden bg-surface-container-highest">
+<img alt="Thumbnail: Productivity tools" class="w-full h-full object-cover" data-alt="Futuristic neon UI smartphone display mockup held by hand in dark mood tech desk setting with violet backlit glow and sleek software dashboard, portrait cinematic angle, 4k ultra detailed." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMlxr3jPuJSCsRK9nFmr3WEzGMZq2lFSdjQZyVeoxgkyvoBeTfgssCkLiIsgtm-hl4OSco6NuOR5tkpeJeZ4moTogV4SYjxVoAr396YarT4kUlWx0FF-lZoGohlTZvF2Bb-x8K9aHHmgA6R4s_lxENIYQ0JUt9L4OyEM6rriMV9dj7PStjEEdR9PwEC7EroujojCBl-vAnEirhy9ppfxRoaFZkHFHHJVfYfIstVhoFJc1NHwfuBWUFzQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent"></div>
+<span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-surface-dim/80 text-text-primary font-label-sm text-[10px] leading-tight font-medium">0:42</span>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="w-6 h-6 rounded-full bg-surface/80 flex items-center justify-center shadow-md text-text-primary">
+<span class="material-symbols-outlined text-[14px]">play_arrow</span>
+</span>
+</div>
+</div>
+<!-- Content Metadata -->
+<div class="flex flex-col justify-between flex-1 min-w-0">
+<div class="flex flex-col gap-1">
+<div class="flex items-start justify-between gap-1">
+<h3 class="font-label-md text-label-md text-text-primary line-clamp-2 leading-snug">5 productivity tools that felt illegal to know 🚀</h3>
+<span class="flex-shrink-0 px-2 py-0.5 rounded-full bg-status-success/15 text-status-success font-label-sm text-label-sm font-semibold">Published</span>
+</div>
+<p class="font-caption text-caption text-text-secondary line-clamp-1">Stop doing manual data entry in 2024...</p>
+</div>
+<span class="font-label-sm text-[11px] text-text-secondary/70">Syndicated 2d ago</span>
+</div>
+</div>
+<!-- Platform Distribution Breakdown Pills -->
+<div class="grid grid-cols-3 gap-1.5 pt-2 border-t border-border/40">
+<!-- TikTok -->
+<div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface-container-high min-w-0">
+<span class="w-2 h-2 rounded-full bg-platform-tiktok-cyan flex-shrink-0"></span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-[10px] text-text-secondary uppercase tracking-wider truncate">TikTok</span>
+<span class="font-label-sm text-label-sm text-text-primary font-bold truncate">1.2M</span>
+</div>
+</div>
+<!-- YouTube -->
+<div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface-container-high min-w-0">
+<span class="w-2 h-2 rounded-full bg-platform-youtube flex-shrink-0"></span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-[10px] text-text-secondary uppercase tracking-wider truncate">Shorts</span>
+<span class="font-label-sm text-label-sm text-text-primary font-bold truncate">780K</span>
+</div>
+</div>
+<!-- Instagram -->
+<div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface-container-high min-w-0">
+<span class="w-2 h-2 rounded-full bg-platform-instagram-mid flex-shrink-0"></span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-[10px] text-text-secondary uppercase tracking-wider truncate">Reels</span>
+<span class="font-label-sm text-label-sm text-text-primary font-bold truncate">420K</span>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 2 -->
+<article class="flex flex-col p-4 rounded-xl bg-surface-container shadow-md gap-3">
+<div class="flex gap-3">
+<!-- 9:16 Video Preview -->
+<div class="relative w-20 h-28 flex-shrink-0 rounded-lg overflow-hidden bg-surface-container-highest">
+<img alt="Thumbnail: Why podcasts fail" class="w-full h-full object-cover" data-alt="Intense high-contrast podcast studio interview with vintage dynamic microphone on boom arm, deep charcoal acoustic foam wall, atmospheric soft amber and magenta studio rim illumination." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOlzQQl2G0MOpCTWFgbzZjWPAItAU2Nyi3pg98CNDj9grzlbtCd3Ga1eCyWbEUCsyrVwRK1J4neAuMoejhcqkCfG_rjSHf-4wDTdZWkGGanAZN4WblRvjyaCZ0HI6lR3nF2ahU4z8BwBpbiHHKCJLnVbrVREllfiyx6n0YDU_4-tnmt8oUwx64rcn-1cF03EpS3LuCyy5rTVEBH6HAmaai3_oHssB8utwMIsUPL5NvnYkybZL5Br2YsQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent"></div>
+<span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-surface-dim/80 text-text-primary font-label-sm text-[10px] leading-tight font-medium">0:35</span>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="w-6 h-6 rounded-full bg-surface/80 flex items-center justify-center shadow-md text-text-primary">
+<span class="material-symbols-outlined text-[14px]">play_arrow</span>
+</span>
+</div>
+</div>
+<!-- Content Metadata -->
+<div class="flex flex-col justify-between flex-1 min-w-0">
+<div class="flex flex-col gap-1">
+<div class="flex items-start justify-between gap-1">
+<h3 class="font-label-md text-label-md text-text-primary line-clamp-2 leading-snug">Why 99% of podcasts fail in their first 3 episodes</h3>
+<span class="flex-shrink-0 px-2 py-0.5 rounded-full bg-status-success/15 text-status-success font-label-sm text-label-sm font-semibold">Published</span>
+</div>
+<p class="font-caption text-caption text-text-secondary line-clamp-1">Here's the distribution breakdown...</p>
+</div>
+<span class="font-label-sm text-[11px] text-text-secondary/70">Syndicated 4d ago</span>
+</div>
+</div>
+<!-- Platform Distribution Breakdown Pills -->
+<div class="grid grid-cols-3 gap-1.5 pt-2 border-t border-border/40">
+<!-- TikTok -->
+<div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface-container-high min-w-0">
+<span class="w-2 h-2 rounded-full bg-platform-tiktok-cyan flex-shrink-0"></span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-[10px] text-text-secondary uppercase tracking-wider truncate">TikTok</span>
+<span class="font-label-sm text-label-sm text-text-primary font-bold truncate">450K</span>
+</div>
+</div>
+<!-- YouTube -->
+<div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface-container-high min-w-0">
+<span class="w-2 h-2 rounded-full bg-platform-youtube flex-shrink-0"></span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-[10px] text-text-secondary uppercase tracking-wider truncate">Shorts</span>
+<span class="font-label-sm text-label-sm text-text-primary font-bold truncate">290K</span>
+</div>
+</div>
+<!-- Instagram -->
+<div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface-container-high min-w-0">
+<span class="w-2 h-2 rounded-full bg-platform-instagram-mid flex-shrink-0"></span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-[10px] text-text-secondary uppercase tracking-wider truncate">Reels</span>
+<span class="font-label-sm text-label-sm text-text-primary font-bold truncate">185K</span>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 3 -->
+<article class="flex flex-col p-4 rounded-xl bg-surface-container shadow-md gap-3">
+<div class="flex gap-3">
+<!-- 9:16 Video Preview -->
+<div class="relative w-20 h-28 flex-shrink-0 rounded-lg overflow-hidden bg-surface-container-highest">
+<img alt="Thumbnail: Workflow automation" class="w-full h-full object-cover" data-alt="Minimalist modern creative workspace with ultrawide monitor displaying node-based automation pipelines, mechanical keyboard, soft ambient purple LED strip glow bouncing off dark wall, professional video production studio vibe." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdtCvxGTKJCOI5XcEGshxH6ypEn6myKq_OOcTh7GiAMdIsODMUKXa7n99szajCrsEPg47MesrZ04CEX0Y1r_U2GIULn59PmtkOogUnInoIs--9gDHPjP3wdCcdipM_luaymiYjfHrDZ2Egk5i94P9FwyCTabgJsyd7f6Cz9DmtKz3lv9CWEDG6d3UdCUJQgnbEnk6MckfX4wiuOudrxC8JYY7gAIQZlepP-1spVCXjSzugyT1fhXUR1Q"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent"></div>
+<span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-surface-dim/80 text-text-primary font-label-sm text-[10px] leading-tight font-medium">0:58</span>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="w-6 h-6 rounded-full bg-surface/80 flex items-center justify-center shadow-md text-text-primary">
+<span class="material-symbols-outlined text-[14px]">play_arrow</span>
+</span>
+</div>
+</div>
+<!-- Content Metadata -->
+<div class="flex flex-col justify-between flex-1 min-w-0">
+<div class="flex flex-col gap-1">
+<div class="flex items-start justify-between gap-1">
+<h3 class="font-label-md text-label-md text-text-primary line-clamp-2 leading-snug">My entire content workflow automated in 10 mins</h3>
+<span class="flex-shrink-0 px-2 py-0.5 rounded-full bg-status-success/15 text-status-success font-label-sm text-label-sm font-semibold">Published</span>
+</div>
+<p class="font-caption text-caption text-text-secondary line-clamp-1">Setup guide for multi-channel syndication...</p>
+</div>
+<span class="font-label-sm text-[11px] text-text-secondary/70">Syndicated 6d ago</span>
+</div>
+</div>
+<!-- Platform Distribution Breakdown Pills -->
+<div class="grid grid-cols-3 gap-1.5 pt-2 border-t border-border/40">
+<!-- TikTok -->
+<div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface-container-high min-w-0">
+<span class="w-2 h-2 rounded-full bg-platform-tiktok-cyan flex-shrink-0"></span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-[10px] text-text-secondary uppercase tracking-wider truncate">TikTok</span>
+<span class="font-label-sm text-label-sm text-text-primary font-bold truncate">310K</span>
+</div>
+</div>
+<!-- YouTube -->
+<div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface-container-high min-w-0">
+<span class="w-2 h-2 rounded-full bg-platform-youtube flex-shrink-0"></span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-[10px] text-text-secondary uppercase tracking-wider truncate">Shorts</span>
+<span class="font-label-sm text-label-sm text-text-primary font-bold truncate">160K</span>
+</div>
+</div>
+<!-- Instagram -->
+<div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface-container-high min-w-0">
+<span class="w-2 h-2 rounded-full bg-platform-instagram-mid flex-shrink-0"></span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-[10px] text-text-secondary uppercase tracking-wider truncate">Reels</span>
+<span class="font-label-sm text-label-sm text-text-primary font-bold truncate">95K</span>
+</div>
+</div>
+</div>
+</article>
+</section>
+<!-- Interactive Time Range Switcher Script -->
+<script>
+    function setChartRange(range, el) {
+      const parent = el.closest('#range-toggle');
+      if (!parent) return;
+      const buttons = parent.querySelectorAll('button');
+      buttons.forEach(btn => {
+        btn.classList.remove('bg-primary-container', 'text-text-primary', 'shadow-sm');
+        btn.classList.add('text-text-secondary');
+      });
+      el.classList.add('bg-primary-container', 'text-text-primary', 'shadow-sm');
+      el.classList.remove('text-text-secondary');
+    }
+  </script>
+</div></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-4px_24px_rgba(0,0,0,0.6)]" data-active-classes="text-primary-container relative after:content-[''] after:absolute after:bottom-1 after:w-1 after:h-1 after:rounded-full after:bg-primary-container"><div class="h-16 px-gutter flex items-center justify-between"><a aria-current="page" class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] px-space-xs transition-all text-primary-container relative after:content-[''] after:absolute after:bottom-1 after:w-1 after:h-1 after:rounded-full after:bg-primary-container" data-path="home" href="#"><span class="material-symbols-outlined text-[24px]">dashboard</span><span class="font-label-sm text-label-sm mt-0.5">Home</span></a><a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] px-space-xs text-text-secondary transition-all hover:text-text-primary" data-path="posts" href="#"><span class="material-symbols-outlined text-[24px]">movie</span><span class="font-label-sm text-label-sm mt-0.5">Posts</span></a><a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] px-space-xs text-text-secondary transition-all hover:text-text-primary" data-path="connect" href="#"><span class="material-symbols-outlined text-[24px]">sync_alt</span><span class="font-label-sm text-label-sm mt-0.5">Connect</span></a><a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] px-space-xs text-text-secondary transition-all hover:text-text-primary" data-path="insights" href="#"><span class="material-symbols-outlined text-[24px]">monitoring</span><span class="font-label-sm text-label-sm mt-0.5">Insights</span></a><a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] px-space-xs text-text-secondary transition-all hover:text-text-primary" data-path="profile" href="#"><span class="material-symbols-outlined text-[24px]">account_circle</span><span class="font-label-sm text-label-sm mt-0.5">Profile</span></a></div></nav></body></html>

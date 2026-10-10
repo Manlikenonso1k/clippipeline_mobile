@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_stack" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "secondary-container": "#8401d2", "error": "#ffb4ab", "on-secondary-fixed-variant": "#6c00ae", "inverse-primary": "#603ce2", "platform-youtube": "#FF0000", "tertiary-fixed": "#ffdcc4", "border": "#2A2A36", "on-secondary-fixed": "#2e004e", "tertiary-container": "#d7791f", "on-secondary": "#4c007c", "on-primary-container": "#2a0088", "on-tertiary": "#4e2600", "platform-tiktok-red": "#FE2C55", "secondary": "#e1b6ff", "platform-instagram-mid": "#DD2A7B", "on-error-container": "#ffdad6", "platform-instagram-start": "#F58529", "secondary-fixed": "#f2daff", "surface-dim": "#131317", "inverse-on-surface": "#303034", "surface-container-low": "#1b1b1f", "on-surface": "#e4e1e7", "surface-tint": "#cabeff", "primary": "#cabeff", "outline-variant": "#484555", "surface-raised": "#1E1E28", "status-warning": "#FF9F43", "surface-bright": "#39393d", "primary-fixed": "#e6deff", "on-tertiary-container": "#442000", "on-primary-fixed-variant": "#4816cb", "outline": "#938ea1", "surface-container-highest": "#353439", "tertiary": "#ffb780", "status-danger": "#EA5455", "primary-fixed-dim": "#cabeff", "tertiary-fixed-dim": "#ffb780", "text-secondary": "#A1A1AE", "surface-variant": "#353439", "on-error": "#690005", "surface-container": "#1f1f23", "on-tertiary-fixed-variant": "#6f3800", "platform-instagram-end": "#8134AF", "surface-container-high": "#2a292e", "secondary-fixed-dim": "#e1b6ff", "on-primary": "#31009a", "platform-tiktok-cyan": "#00F2EA", "surface": "#16161D", "background": "#131317", "on-background": "#e4e1e7", "surface-container-lowest": "#0e0e12", "status-success": "#28C76F", "text-primary": "#FFFFFF", "inverse-surface": "#e4e1e7", "on-surface-variant": "#c9c4d8", "on-primary-fixed": "#1c0062", "error-container": "#93000a", "on-tertiary-fixed": "#2f1400", "primary-container": "#947dff", "on-secondary-container": "#e5bfff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-xl": "1.5rem", "space-lg": "1.25rem", "space-md": "1rem", "space-xs": "0.25rem", "space-sm": "0.5rem", "gutter": "1rem", "margin": "1rem" }, "fontFamily": { "headline-md": ["Inter"], "label-sm": ["Inter"], "stat-xl": ["Inter"], "display": ["Inter"], "caption": ["Inter"], "body-lg": ["Inter"], "label-md": ["Inter"], "body-md": ["Inter"], "stat-lg": ["Inter"], "headline-lg": ["Inter"] }, "fontSize": { "headline-md": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }], "stat-xl": ["36px", { "lineHeight": "42px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "display": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "caption": ["13px", { "lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "500" }], "body-lg": ["16px", { "lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400" }], "label-md": ["14px", { "lineHeight": "18px", "letterSpacing": "0.01em", "fontWeight": "600" }], "body-md": ["15px", { "lineHeight": "22px", "letterSpacing": "0em", "fontWeight": "400" }], "stat-lg": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-lg": ["24px", { "lineHeight": "30px", "letterSpacing": "-0.015em", "fontWeight": "700" }] } } } };</script><style>@layer base{html,body{width:100%;margin:0;padding:0;background-color:#131317;color:#e4e1e7;}body{overscroll-behavior:none;font-family:'Inter',sans-serif;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style></head><body class="bg-background flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.4)]"><div class="h-16 px-gutter flex items-center justify-between"><div class="flex items-center gap-space-sm"><a aria-label="Go back" class="min-w-[44px] min-h-[44px] -ml-2 rounded-xl flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-surface-raised transition-colors" data-path="posts" href="#"><span class="material-symbols-outlined text-[24px]">arrow_back</span></a><span class="font-headline-md text-headline-md text-text-primary tracking-tight">Post Details</span></div><div class="flex items-center gap-1"><button aria-label="Share post" class="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-surface-raised transition-colors"><span class="material-symbols-outlined text-[22px]">share</span></button><button aria-label="More options" class="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-text-secondary hover:text-text-primary active:bg-surface-raised transition-colors"><span class="material-symbols-outlined text-[22px]">more_vert</span></button></div></div></header><main class="flex flex-col relative w-full pt-16 pb-safe bg-surface min-h-screen"><div class="flex flex-col w-full pb-28">
+<!-- Dynamic Ambient Glow Backdrop -->
+<div class="relative w-full overflow-hidden px-gutter pt-space-md">
+<div class="absolute -top-12 left-1/2 -translate-x-1/2 w-72 h-72 bg-primary-container/10 rounded-full blur-[90px] pointer-events-none"></div>
+<!-- SECTION 1: Video Preview & Primary Post Metadata -->
+<div class="flex flex-col gap-space-md">
+<!-- 9:16 Video Canvas Card -->
+<div class="relative w-full rounded-xl bg-surface-container overflow-hidden shadow-xl">
+<!-- Media Visual Stage -->
+<div class="relative w-full aspect-[9/13] bg-surface-container-lowest flex items-center justify-center overflow-hidden">
+<img alt="Video Preview" class="w-full h-full object-cover select-none" data-alt="Vertical short-form creator video frame featuring a young tech creator at a moody dark workstation with neon violet backlighting, holding an ultra-thin smartphone showing animated pipeline diagrams with dynamic depth of field and soft volumetric studio lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCFQCYwzRIf8JH_BvZ0vSQb4U9y1mejyWt50gpR1mYwmN4GzZY0NQ_yCqsLdibQQUVJFO_hoiR5YoJfGg4irO_r_Pp-vicWAZZjH94jiguPNgjc4eH80xZ1BBrDDqkJr2JRS3jiXK3qeOROoBuVfpLEiCWU4ZOepU3FJLKmPlUDgwgCqVLCecSgUuRtaLAONWp4En3DtPuJbeqAeyR3kOF8OZ0Js1ldpV1DCjuOaCqKiymTyMw86cWfWQ"/>
+<!-- Gradient Scrim Overlays -->
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-transparent to-surface-container-lowest/60"></div>
+<!-- Top Video Badges Bar -->
+<div class="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-md">
+<span class="w-2 h-2 rounded-full bg-platform-tiktok-cyan animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-text-primary tracking-wide">@alexcreates</span>
+</div>
+<div class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-md text-text-secondary">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="font-caption text-caption">2d ago</span>
+</div>
+</div>
+<!-- Play Center Action Trigger -->
+<button aria-label="Play master video preview" class="relative group min-w-[56px] min-h-[56px] w-14 h-14 rounded-full bg-surface-raised/90 backdrop-blur-md flex items-center justify-center text-text-primary shadow-lg active:scale-95 transition-transform" id="playVideoBtn">
+<div class="absolute inset-0 rounded-full bg-primary/20 scale-100 group-hover:scale-110 transition-transform"></div>
+<span class="material-symbols-outlined text-[32px] text-primary ml-0.5" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+<!-- Bottom Scrub / Time Specifier -->
+<div class="absolute bottom-3 left-3 right-3 flex items-center justify-between text-text-primary">
+<span class="px-2 py-0.5 rounded bg-surface-container-lowest/90 font-label-sm text-label-sm tracking-wider font-mono">0:42</span>
+<div class="flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container-lowest/90 font-label-sm text-label-sm text-text-secondary">
+<span class="material-symbols-outlined text-[13px] text-platform-tiktok-cyan">hd</span>
+<span>1080p • 60fps</span>
+</div>
+</div>
+</div>
+<!-- Video Content Summary -->
+<div class="p-space-md flex flex-col gap-space-sm bg-surface-container">
+<div class="flex items-start justify-between gap-2">
+<h1 class="font-headline-md text-headline-md text-text-primary line-clamp-2">
+              5 productivity tools that felt illegal to know in 2024
+            </h1>
+<button aria-label="Copy caption" class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-surface-raised text-text-secondary hover:text-text-primary active:bg-surface-bright transition-colors" id="copyCaptionBtn">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+<!-- Caption & Smart Tags -->
+<p class="font-body-md text-body-md text-text-secondary leading-relaxed">
+            Stop doing manual data entry in your workflows and let sync pipelines do the heavy lifting. Full breakdown of tools linked in bio! ⚡
+            <span class="text-primary-container font-medium block mt-1">#tech #ai #automation #productivity</span>
+</p>
+<!-- Source Channel Verification Strip -->
+<div class="mt-space-xs pt-space-xs flex items-center justify-between text-text-secondary bg-surface-raised/70 rounded-lg p-2.5">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface-container-highest flex items-center justify-center">
+<span class="font-label-sm text-label-sm font-bold text-platform-tiktok-cyan">Tk</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-text-primary leading-tight">Master Source: TikTok</span>
+<span class="font-caption text-caption text-text-secondary">Clean sync • No watermark</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-label-md text-label-md text-text-primary font-mono block">142.8K</span>
+<span class="font-caption text-caption text-text-secondary">source views</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- SECTION 2: Multi-Platform Syndication Grid -->
+<div class="mt-space-xl flex flex-col gap-space-sm">
+<div class="flex items-center justify-between px-1">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-3.5 bg-primary rounded-full"></span>
+<h2 class="font-label-md text-label-md text-text-primary uppercase tracking-wider">
+            Distribution
+          </h2>
+<span class="font-caption text-caption text-text-secondary">• 2 Target Channels</span>
+</div>
+<button class="font-label-sm text-label-sm text-primary flex items-center gap-1 hover:underline min-h-[44px] py-2 px-1">
+<span class="material-symbols-outlined text-[16px]">sync_alt</span>
+          Manage Sync
+        </button>
+</div>
+<!-- Channel Row 1: YouTube Shorts (Published) -->
+<div class="rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-9 h-9 rounded-lg bg-surface-raised flex items-center justify-center">
+<span class="material-symbols-outlined text-platform-youtube text-[22px]">smart_display</span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md text-text-primary">YouTube Shorts</span>
+<span class="material-symbols-outlined text-[14px] text-status-success" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<span class="font-caption text-caption text-text-secondary">Oct 24, 14:32 • ID: #yt-892f1a</span>
+</div>
+</div>
+<!-- Status Pill: Published -->
+<div class="px-2.5 py-1 rounded-full bg-status-success/15 flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success"></span>
+<span class="font-label-sm text-label-sm text-status-success">Published</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-1">
+<span class="font-caption text-caption text-text-secondary">Transcode: 1080x1920 • 60fps</span>
+<a class="min-h-[44px] px-3 rounded-lg bg-surface-raised flex items-center gap-1.5 text-text-primary hover:bg-surface-bright active:scale-95 transition-all font-label-sm text-label-sm" href="#">
+<span>Shorts Link</span>
+<span class="material-symbols-outlined text-[15px] text-text-secondary">north_east</span>
+</a>
+</div>
+</div>
+<!-- Channel Row 2: Instagram Reels (Failed) -->
+<div class="rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-platform-instagram-start via-platform-instagram-mid to-platform-instagram-end flex items-center justify-center text-text-primary">
+<span class="material-symbols-outlined text-[20px]">camera_alt</span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md text-text-primary">Instagram Reels</span>
+<span class="material-symbols-outlined text-[14px] text-status-danger">error</span>
+</div>
+<span class="font-caption text-caption text-text-secondary">Scheduled attempt failed</span>
+</div>
+</div>
+<!-- Status Pill: Failed -->
+<div class="px-2.5 py-1 rounded-full bg-status-danger/15 flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-status-danger animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-status-danger">Failed</span>
+</div>
+</div>
+<!-- Failure Diagnostic Banner -->
+<div class="rounded-lg bg-status-danger/10 p-3 flex flex-col gap-1.5">
+<div class="flex items-start gap-2">
+<span class="material-symbols-outlined text-[18px] text-status-danger shrink-0 mt-0.5">warning</span>
+<p class="font-caption text-caption text-status-danger leading-snug">
+              Token expired on Instagram Reels (Meta Graph API Error 190: OAuthException). Account permissions need refreshing.
+            </p>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<button class="min-h-[44px] flex-1 px-3 rounded-lg bg-status-danger text-text-primary font-label-sm text-label-sm flex items-center justify-center gap-1 active:scale-95 transition-all shadow-sm" id="retrySyndicationBtn">
+<span class="material-symbols-outlined text-[16px]">replay</span>
+              Retry Syndication
+            </button>
+<button class="min-h-[44px] px-3 rounded-lg bg-surface-raised text-text-primary font-label-sm text-label-sm flex items-center justify-center gap-1 hover:bg-surface-bright active:scale-95 transition-colors">
+<span class="material-symbols-outlined text-[16px]">key</span>
+              Re-authorize
+            </button>
+</div>
+</div>
+</div>
+</div>
+<!-- SECTION 3: Cross-Platform Performance Analytics -->
+<div class="mt-space-xl flex flex-col gap-space-sm">
+<div class="flex items-center justify-between px-1">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-3.5 bg-primary-container rounded-full"></span>
+<h2 class="font-label-md text-label-md text-text-primary uppercase tracking-wider">
+            Cross-Platform Analytics
+          </h2>
+</div>
+<span class="font-caption text-caption text-status-success flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success animate-ping"></span>
+          Live Sync
+        </span>
+</div>
+<!-- Segmented Control Bar -->
+<div class="grid grid-cols-4 p-1 rounded-xl bg-surface-container gap-1">
+<button class="platform-tab min-h-[44px] py-1.5 rounded-lg bg-primary-container text-on-primary-container font-label-sm text-label-sm transition-all text-center" id="tabAggregated">
+          Aggregated
+        </button>
+<button class="platform-tab min-h-[44px] py-1.5 rounded-lg text-text-secondary hover:text-text-primary font-label-sm text-label-sm transition-all text-center" id="tabTikTok">
+          TikTok
+        </button>
+<button class="platform-tab min-h-[44px] py-1.5 rounded-lg text-text-secondary hover:text-text-primary font-label-sm text-label-sm transition-all text-center" id="tabYouTube">
+          YouTube
+        </button>
+<button class="platform-tab min-h-[44px] py-1.5 rounded-lg text-text-secondary hover:text-text-primary font-label-sm text-label-sm transition-all text-center" id="tabReels">
+          Reels
+        </button>
+</div>
+<!-- Combined Aggregated Big Metrics Hero Card -->
+<div class="rounded-xl bg-surface-container p-space-lg shadow-lg relative overflow-hidden">
+<div class="absolute right-0 top-0 w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none"></div>
+<div class="flex items-center justify-between pb-2">
+<span class="font-label-sm text-label-sm text-text-secondary uppercase tracking-wider">Combined Total Reach</span>
+<span class="px-2 py-0.5 rounded-full bg-status-success/15 text-status-success font-caption text-caption font-semibold flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[13px]">trending_up</span> +34.2% vs avg
+          </span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-stat-xl text-stat-xl text-text-primary font-mono tracking-tight">1.2M</span>
+<span class="font-body-md text-body-md text-text-secondary">Gross Views</span>
+</div>
+<!-- Metric Cluster -->
+<div class="grid grid-cols-4 gap-2 pt-4 mt-2">
+<div class="flex flex-col">
+<span class="font-caption text-caption text-text-secondary">Likes</span>
+<span class="font-label-md text-label-md text-text-primary font-mono font-bold mt-0.5">98.4K</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-caption text-text-secondary">Comments</span>
+<span class="font-label-md text-label-md text-text-primary font-mono font-bold mt-0.5">3.8K</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-caption text-text-secondary">Shares</span>
+<span class="font-label-md text-label-md text-text-primary font-mono font-bold mt-0.5">14.2K</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-caption text-text-secondary">Watch Time</span>
+<span class="font-label-md text-label-md text-text-primary font-mono font-bold mt-0.5">412h</span>
+</div>
+</div>
+<!-- Micro Sparkline SVG Indicator -->
+<div class="mt-4 pt-3 w-full">
+<div class="flex justify-between items-center text-text-secondary pb-1">
+<span class="font-caption text-caption">Syndication Velocity</span>
+<span class="font-caption text-caption font-mono">1.8k views/hr</span>
+</div>
+<svg class="w-full h-8 text-primary" fill="none" viewbox="0 0 320 32">
+<path d="M0 28 C 30 26, 60 20, 90 22 C 120 24, 150 12, 180 14 C 210 16, 240 6, 270 4 C 290 3, 310 1, 320 2" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+<path d="M0 28 C 30 26, 60 20, 90 22 C 120 24, 150 12, 180 14 C 210 16, 240 6, 270 4 C 290 3, 310 1, 320 2 L 320 32 L 0 32 Z" fill="currentColor" fill-opacity="0.08"></path>
+</svg>
+</div>
+</div>
+<!-- Platform Deep Dive Comparative Cards -->
+<div class="flex flex-col gap-space-sm mt-1">
+<!-- 1. TikTok Source Tile -->
+<div class="rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-platform-tiktok-cyan shadow-sm"></span>
+<span class="font-label-md text-label-md text-text-primary">TikTok (Master Original)</span>
+</div>
+<span class="font-caption text-caption text-text-secondary font-mono">Avg Watch: 41s</span>
+</div>
+<div class="grid grid-cols-4 gap-2 pt-1 text-center bg-surface-raised rounded-lg p-2.5">
+<div>
+<span class="font-caption text-caption text-text-secondary block">Views</span>
+<span class="font-label-md text-label-md text-text-primary font-mono">1.2M</span>
+</div>
+<div>
+<span class="font-caption text-caption text-text-secondary block">Likes</span>
+<span class="font-label-md text-label-md text-text-primary font-mono">88K</span>
+</div>
+<div>
+<span class="font-caption text-caption text-text-secondary block">Comments</span>
+<span class="font-label-md text-label-md text-text-primary font-mono">4.1K</span>
+</div>
+<div>
+<span class="font-caption text-caption text-text-secondary block">Shares</span>
+<span class="font-label-md text-label-md text-text-primary font-mono">18.3K</span>
+</div>
+</div>
+</div>
+<!-- 2. YouTube Shorts Tile -->
+<div class="rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-platform-youtube shadow-sm"></span>
+<span class="font-label-md text-label-md text-text-primary">YouTube Shorts</span>
+</div>
+<span class="font-caption text-caption text-status-success font-mono font-medium">38s (90% Ret.)</span>
+</div>
+<div class="grid grid-cols-4 gap-2 pt-1 text-center bg-surface-raised rounded-lg p-2.5">
+<div>
+<span class="font-caption text-caption text-text-secondary block">Views</span>
+<span class="font-label-md text-label-md text-text-primary font-mono">780K</span>
+</div>
+<div>
+<span class="font-caption text-caption text-text-secondary block">Likes</span>
+<span class="font-label-md text-label-md text-text-primary font-mono">62K</span>
+</div>
+<div>
+<span class="font-caption text-caption text-text-secondary block">Comments</span>
+<span class="font-label-md text-label-md text-text-primary font-mono">2.4K</span>
+</div>
+<div>
+<span class="font-caption text-caption text-text-secondary block">Shares</span>
+<span class="font-label-md text-label-md text-text-primary font-mono">9.1K</span>
+</div>
+</div>
+</div>
+<!-- 3. Instagram Reels Diagnostics Tile -->
+<div class="rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-2 opacity-85">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-platform-instagram-mid shadow-sm"></span>
+<span class="font-label-md text-label-md text-text-primary">Instagram Reels</span>
+</div>
+<span class="font-caption text-caption text-status-danger font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">sync_problem</span> Sync Incomplete
+            </span>
+</div>
+<div class="grid grid-cols-4 gap-2 pt-1 text-center bg-surface-raised rounded-lg p-2.5">
+<div>
+<span class="font-caption text-caption text-text-secondary block">Views</span>
+<span class="font-label-md text-label-md text-text-secondary font-mono">--</span>
+</div>
+<div>
+<span class="font-caption text-caption text-text-secondary block">Likes</span>
+<span class="font-label-md text-label-md text-text-secondary font-mono">--</span>
+</div>
+<div>
+<span class="font-caption text-caption text-text-secondary block">Comments</span>
+<span class="font-label-md text-label-md text-text-secondary font-mono">--</span>
+</div>
+<div>
+<span class="font-caption text-caption text-text-secondary block">Shares</span>
+<span class="font-label-md text-label-md text-text-secondary font-mono">--</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Sync Timestamp and Auto-refresh heartbeat -->
+<div class="mt-space-lg mb-space-sm flex items-center justify-between text-text-secondary px-2">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[15px] animate-spin text-primary">rotate_right</span>
+<span class="font-caption text-caption">Last synced: Just now</span>
+</div>
+<span class="font-caption text-caption">Auto-refreshes every 15m</span>
+</div>
+</div>
+<!-- FIXED BOTTOM FLOATING DOCK -->
+<div class="fixed bottom-0 left-0 right-0 z-40 p-gutter bg-surface/90 backdrop-blur-xl shadow-2xl">
+<div class="max-w-md mx-auto flex items-center gap-2.5">
+<!-- Edit Caption & Meta Action -->
+<button class="min-h-[48px] px-4 rounded-xl bg-surface-raised text-text-primary font-label-md text-label-md flex items-center justify-center gap-2 active:bg-surface-bright active:scale-95 transition-all" id="editPostBtn">
+<span class="material-symbols-outlined text-[18px]">edit_note</span>
+<span>Edit Caption</span>
+</button>
+<!-- Re-sync All Channels Primary Button -->
+<button class="min-h-[48px] flex-1 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed font-label-md text-label-md font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary-container/20 active:opacity-90 active:scale-98 transition-all" id="resyncAllBtn">
+<span class="material-symbols-outlined text-[19px]">sync</span>
+<span>Re-sync All Channels</span>
+</button>
+</div>
+</div>
+</div>
+<script>
+  // Micro-interactions and Toast Feedbacks
+  document.addEventListener('DOMContentLoaded', () => {
+    const copyBtn = document.getElementById('copyCaptionBtn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const icon = copyBtn.querySelector('.material-symbols-outlined');
+        if (icon) {
+          icon.textContent = 'done';
+          icon.classList.add('text-status-success');
+          setTimeout(() => {
+            icon.textContent = 'content_copy';
+            icon.classList.remove('text-status-success');
+          }, 1800);
+        }
+      });
+    }
+
+    const retryBtn = document.getElementById('retrySyndicationBtn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function() {
+        const icon = this.querySelector('.material-symbols-outlined');
+        if (icon) icon.classList.add('animate-spin');
+        this.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span> Re-dispatching...';
+        setTimeout(() => {
+          this.innerHTML = '<span class="material-symbols-outlined text-[16px]">check</span> Queued for Reels';
+          this.classList.remove('bg-status-danger');
+          this.classList.add('bg-status-warning', 'text-surface-container-lowest');
+        }, 1200);
+      });
+    }
+
+    const resyncBtn = document.getElementById('resyncAllBtn');
+    if (resyncBtn) {
+      resyncBtn.addEventListener('click', function() {
+        const icon = this.querySelector('.material-symbols-outlined');
+        if (icon) icon.classList.add('animate-spin');
+        setTimeout(() => {
+          if (icon) icon.classList.remove('animate-spin');
+          this.innerHTML = '<span class="material-symbols-outlined text-[19px]">done_all</span> Pipelines Synced!';
+          setTimeout(() => {
+            this.innerHTML = '<span class="material-symbols-outlined text-[19px]">sync</span> Re-sync All Channels';
+          }, 2000);
+        }, 1000);
+      });
+    }
+
+    // Tab Navigation Interaction
+    const tabs = document.querySelectorAll('.platform-tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => {
+          t.classList.remove('bg-primary-container', 'text-on-primary-container');
+          t.classList.add('text-text-secondary');
+        });
+        tab.classList.remove('text-text-secondary');
+        tab.classList.add('bg-primary-container', 'text-on-primary-container');
+      });
+    });
+  });
+</script></main></body></html>

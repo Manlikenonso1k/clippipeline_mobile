@@ -1,98 +1,30 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+﻿import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+const C = { bg: '#0E0E12', surface: '#16161D', raised: '#1E1E28', border: '#2A2A36', primary: '#CABEFF', violet: '#7C5CFF', text: '#FFFFFF', muted: '#A1A1AE', cyan: '#00F2EA', success: '#28C76F' } as const;
+const benefits = [
+  ['shutter-speed', 'Auto-sync in real time', 'Triggers instant processing via automated webhooks'],
+  ['high-quality', 'Full HD original bitrates', 'Crisp 60fps video and uncompressed audio retained'],
+  ['lock', 'Source account secured', 'Official TikTok Creator API with zero credential sharing'],
+] as const;
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
+export default function WelcomeOneScreen() {
+  return <SafeAreaView style={s.safe}><StatusBar style="light" /><ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <View style={s.top}><View style={s.stepPill}><Text style={s.step}>Step 1</Text><Text style={s.of}>of 3</Text></View><Pressable onPress={() => router.replace('/dashboard' as any)}><Text style={s.skip}>Skip</Text></Pressable></View>
+    <View style={s.hero}><View style={[s.glow, s.glowOne]} /><View style={[s.glow, s.glowTwo]} /><View style={s.orbit} />
+      <View style={s.video}><Image source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAbrZnZtDTHmKBLdyJOvt3Mnz3gXrQn2SjkEn_pBrhmeCvlB6dOwZj51JzjdDGgVeXA8q5mxJO6kvcW1MNnBgWA-xC97tv66pJBaG-df_lPD0dzI_vfkCmJhZa8LvJTXKfsoV_TYnxBZutQziZxN-BsveJyOnqV1FBVNqnfEVztcM855h9wcFN7ghvnLs5-xq-65nXtjOsTEBF19gbRW8wBZkpF9oRGFFAYIXVZv8JthekjWv1WGQ3QcA' }} style={StyleSheet.absoluteFill} /><View style={s.scrim} />
+        <View style={s.videoTop}><View style={s.new}><View style={s.live} /><Text style={s.newText}>NEW</Text></View><View style={s.bubble}><MaterialIcons name="bolt" size={15} color={C.text} /></View></View>
+        <View style={s.fetch}><View style={s.sync}><MaterialIcons name="sync" size={22} color={C.primary} /></View><Text style={s.fetchText}>Auto Fetching</Text></View>
+        <View style={s.videoBottom}><View style={s.quality}><MaterialIcons name="check-circle" size={15} color={C.success} /><Text style={s.qualityText}>1080p</Text></View><Text style={s.lag}>0s lag</Text></View>
+      </View><View style={s.watermark}><MaterialIcons name="verified" size={15} color={C.success} /><Text style={s.watermarkText}>No Watermark</Text></View><View style={s.channels}><View style={s.channel}><MaterialIcons name="play-circle" size={20} color="#FE2C55" /></View><View style={[s.channel,s.smallChannel]}><MaterialIcons name="sensors" size={16} color={C.primary} /></View></View>
+    </View>
+    <View style={s.copy}><View style={s.eyebrow}><View style={s.eyebrowDot} /><Text style={s.eyebrowText}>INTELLIGENT INGESTION</Text></View><Text style={s.title}>Connect TikTok. Auto-Fetch Every Clip.</Text><Text style={s.desc}>ClipPipeline instantly captures your latest high-performing videos the moment you tap publish. Zero manual downloading, raw source quality preserved, and watermark-free.</Text></View>
+    <View style={s.benefits}>{benefits.map(([icon, title, detail]) => <View key={title} style={s.benefit}><View style={s.benefitIcon}><MaterialIcons name={icon} size={19} color={C.primary} /></View><View style={s.benefitCopy}><Text style={s.benefitTitle}>{title}</Text><Text numberOfLines={1} style={s.benefitDetail}>{detail}</Text></View></View>)}</View>
+    <View style={s.footer}><View style={s.dots}><View style={s.activeDot} /><View style={s.dot} /><View style={s.dot} /></View><Pressable accessibilityRole="button" style={({pressed}) => [s.cta, pressed && s.pressed]} onPress={() => router.push('/welcome/two' as any)}><Text style={s.ctaText}>Next: Where We Post</Text><MaterialIcons name="arrow-forward" size={20} color={C.text} /></Pressable></View>
+  </ScrollView></SafeAreaView>;
 }
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+const s = StyleSheet.create({
+  safe:{flex:1,backgroundColor:C.bg},content:{paddingHorizontal:16,paddingBottom:24,flexGrow:1},top:{height:56,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},stepPill:{flexDirection:'row',gap:5,backgroundColor:'#1F1F23',borderRadius:999,paddingHorizontal:12,paddingVertical:6},step:{color:C.primary,fontSize:12,fontWeight:'700'},of:{color:C.muted,fontSize:12,fontWeight:'600'},skip:{color:C.muted,fontSize:14,fontWeight:'600',padding:10},hero:{height:292,overflow:'hidden',borderRadius:20,borderWidth:1,borderColor:C.border,backgroundColor:C.surface,alignItems:'center',justifyContent:'center',marginBottom:24},glow:{position:'absolute',width:190,height:190,borderRadius:95},glowOne:{backgroundColor:'#7C5CFF33',top:-100,left:-72},glowTwo:{backgroundColor:'#00F2EA22',bottom:-100,right:-95},orbit:{position:'absolute',width:226,height:226,borderRadius:113,borderColor:C.primary,borderWidth:1,borderStyle:'dashed',opacity:.48},video:{width:144,height:238,borderRadius:14,overflow:'hidden',padding:10,justifyContent:'space-between',backgroundColor:C.raised,elevation:9},scrim:{...StyleSheet.absoluteFill,backgroundColor:'#0E0E1266'},videoTop:{zIndex:1,flexDirection:'row',justifyContent:'space-between'},new:{flexDirection:'row',alignItems:'center',gap:4,backgroundColor:'#0E0E12CC',paddingVertical:3,paddingHorizontal:7,borderRadius:99},live:{height:6,width:6,borderRadius:3,backgroundColor:C.cyan},newText:{fontSize:10,fontWeight:'700',color:C.cyan},bubble:{height:25,width:25,borderRadius:13,alignItems:'center',justifyContent:'center',backgroundColor:'#0E0E12B3'},fetch:{zIndex:1,alignItems:'center',gap:6},sync:{height:43,width:43,borderRadius:22,alignItems:'center',justifyContent:'center',backgroundColor:'#CABEFF33'},fetchText:{fontSize:11,fontWeight:'600',color:C.text,backgroundColor:'#0E0E12CC',borderRadius:99,paddingHorizontal:8,paddingVertical:3},videoBottom:{zIndex:1,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},quality:{flexDirection:'row',alignItems:'center',gap:3},qualityText:{color:C.text,fontSize:11,fontWeight:'700'},lag:{color:C.primary,fontSize:11,fontWeight:'700'},watermark:{position:'absolute',left:-4,bottom:34,flexDirection:'row',alignItems:'center',gap:5,backgroundColor:C.raised,paddingHorizontal:9,paddingVertical:6,borderRadius:99},watermarkText:{color:C.text,fontSize:11,fontWeight:'700'},channels:{position:'absolute',right:-3,top:33,gap:8},channel:{width:37,height:37,borderRadius:19,alignItems:'center',justifyContent:'center',backgroundColor:C.raised},smallChannel:{width:31,height:31,borderRadius:16,marginLeft:13,backgroundColor:'#1F1F23'},copy:{marginBottom:22},eyebrow:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:9},eyebrowDot:{height:8,width:8,borderRadius:4,backgroundColor:C.primary},eyebrowText:{color:C.primary,fontSize:12,fontWeight:'700',letterSpacing:1},title:{color:C.text,fontSize:25,lineHeight:31,fontWeight:'700',letterSpacing:-.5,marginBottom:9},desc:{color:C.muted,fontSize:15,lineHeight:22},benefits:{gap:10,marginBottom:28},benefit:{backgroundColor:C.surface,borderColor:C.border,borderWidth:1,borderRadius:12,padding:12,flexDirection:'row',alignItems:'center',gap:12},benefitIcon:{height:34,width:34,borderRadius:8,alignItems:'center',justifyContent:'center',backgroundColor:'#2A292E'},benefitCopy:{flex:1},benefitTitle:{color:C.text,fontSize:14,fontWeight:'700',marginBottom:3},benefitDetail:{color:C.muted,fontSize:12},footer:{marginTop:'auto',gap:18},dots:{flexDirection:'row',alignSelf:'center',gap:8,alignItems:'center'},activeDot:{width:25,height:8,borderRadius:99,backgroundColor:C.violet},dot:{width:8,height:8,borderRadius:4,backgroundColor:'#353439'},cta:{height:50,backgroundColor:C.violet,borderRadius:12,flexDirection:'row',justifyContent:'center',alignItems:'center',gap:8,elevation:6},pressed:{opacity:.85,transform:[{scale:.98}]},ctaText:{color:C.text,fontSize:15,fontWeight:'700'}
 });

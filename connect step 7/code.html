@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "secondary-container": "#8401d2", "error": "#ffb4ab", "on-secondary-fixed-variant": "#6c00ae", "inverse-primary": "#603ce2", "platform-youtube": "#FF0000", "tertiary-fixed": "#ffdcc4", "border": "#2A2A36", "on-secondary-fixed": "#2e004e", "tertiary-container": "#d7791f", "on-secondary": "#4c007c", "on-primary-container": "#2a0088", "on-tertiary": "#4e2600", "platform-tiktok-red": "#FE2C55", "secondary": "#e1b6ff", "platform-instagram-mid": "#DD2A7B", "on-error-container": "#ffdad6", "platform-instagram-start": "#F58529", "secondary-fixed": "#f2daff", "surface-dim": "#131317", "inverse-on-surface": "#303034", "surface-container-low": "#1b1b1f", "on-surface": "#e4e1e7", "surface-tint": "#cabeff", "primary": "#cabeff", "outline-variant": "#484555", "surface-raised": "#1E1E28", "status-warning": "#FF9F43", "surface-bright": "#39393d", "primary-fixed": "#e6deff", "on-tertiary-container": "#442000", "on-primary-fixed-variant": "#4816cb", "outline": "#938ea1", "surface-container-highest": "#353439", "tertiary": "#ffb780", "status-danger": "#EA5455", "primary-fixed-dim": "#cabeff", "tertiary-fixed-dim": "#ffb780", "text-secondary": "#A1A1AE", "surface-variant": "#353439", "on-error": "#690005", "surface-container": "#1f1f23", "on-tertiary-fixed-variant": "#6f3800", "platform-instagram-end": "#8134AF", "surface-container-high": "#2a292e", "secondary-fixed-dim": "#e1b6ff", "on-primary": "#31009a", "platform-tiktok-cyan": "#00F2EA", "surface": "#16161D", "background": "#131317", "on-background": "#e4e1e7", "surface-container-lowest": "#0e0e12", "status-success": "#28C76F", "text-primary": "#FFFFFF", "inverse-surface": "#e4e1e7", "on-surface-variant": "#c9c4d8", "on-primary-fixed": "#1c0062", "error-container": "#93000a", "on-tertiary-fixed": "#2f1400", "primary-container": "#947dff", "on-secondary-container": "#e5bfff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-xl": "1.5rem", "space-lg": "1.25rem", "space-md": "1rem", "space-xs": "0.25rem", "space-sm": "0.5rem", "gutter": "1rem", "margin": "1rem" }, "fontFamily": { "headline-md": ["Inter"], "label-sm": ["Inter"], "stat-xl": ["Inter"], "display": ["Inter"], "caption": ["Inter"], "body-lg": ["Inter"], "label-md": ["Inter"], "body-md": ["Inter"], "stat-lg": ["Inter"], "headline-lg": ["Inter"] }, "fontSize": { "headline-md": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }], "stat-xl": ["36px", { "lineHeight": "42px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "display": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "caption": ["13px", { "lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "500" }], "body-lg": ["16px", { "lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400" }], "label-md": ["14px", { "lineHeight": "18px", "letterSpacing": "0.01em", "fontWeight": "600" }], "body-md": ["15px", { "lineHeight": "22px", "letterSpacing": "0em", "fontWeight": "400" }], "stat-lg": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-lg": ["24px", { "lineHeight": "30px", "letterSpacing": "-0.015em", "fontWeight": "700" }] } } } };</script><style>@layer base{html,body{width:100%;margin:0;padding:0;background-color:#131317;color:#e4e1e7;}body{overscroll-behavior:none;font-family:'Inter',sans-serif;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head><body class="bg-background flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.4)]"><div class="h-16 px-gutter flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="w-9 h-9 rounded-xl bg-primary-container flex items-center justify-center text-text-primary shadow-[0_2px_12px_rgba(148,125,255,0.35)]"><span class="material-symbols-outlined text-[20px]">auto_videocam</span></div><span class="font-headline-md text-headline-md text-text-primary tracking-tight">Home</span></div><div class="flex items-center gap-space-sm"><button aria-label="Notifications" class="w-11 h-11 rounded-full flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors"><span class="material-symbols-outlined text-[22px]">notifications</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex flex-col relative w-full pt-16 pb-24 bg-surface min-h-screen"><div class="flex flex-col w-full px-gutter space-y-space-lg pb-10">
+<!-- Screen Subheader & Live Sync Status -->
+<section class="flex flex-col space-y-space-sm pt-2">
+<div class="flex items-center justify-between">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-text-primary tracking-tight">Social Channels</h1>
+<p class="font-body-md text-body-md text-text-secondary mt-1 leading-snug">
+          Connect TikTok to import clips, then connect YouTube &amp; Instagram to auto-syndicate.
+        </p>
+</div>
+</div>
+<!-- Live Sync Mini Header Pill -->
+<div class="flex items-center justify-between bg-surface-container-high/90 px-space-md py-2.5 rounded-xl">
+<div class="flex items-center space-x-2">
+<span class="relative flex h-2.5 w-2.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-success opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-status-success"></span>
+</span>
+<span class="font-label-sm text-label-sm text-text-primary tracking-wide">2 of 3 Connected</span>
+<span class="text-text-secondary font-caption text-caption">•</span>
+<span class="font-caption text-caption text-text-secondary">Auto-sync active</span>
+</div>
+<div class="flex items-center space-x-1.5 text-primary">
+<span class="material-symbols-outlined text-[16px]">bolt</span>
+<span class="font-label-sm text-label-sm">High Velocity</span>
+</div>
+</div>
+</section>
+<!-- Channels Stack -->
+<section class="flex flex-col space-y-space-md">
+<!-- 1. TIKTOK CARD (Mandatory Source Account) -->
+<div class="relative bg-surface-raised rounded-[20px] p-space-md shadow-lg overflow-hidden transition-all duration-300 hover:shadow-[0_4px_28px_rgba(0,242,234,0.12)]">
+<!-- Ambient Source Glow Accent -->
+<div class="absolute -top-12 -right-12 w-32 h-32 bg-platform-tiktok-cyan/10 rounded-full blur-2xl pointer-events-none"></div>
+<div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-platform-tiktok-cyan via-platform-tiktok-red to-primary-container"></div>
+<div class="flex flex-col space-y-3">
+<!-- Top Metadata & Status -->
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-platform-tiktok-cyan/15 text-platform-tiktok-cyan font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">input</span>
+<span>SOURCE ACCOUNT • REQUIRED</span>
+</span>
+<div class="flex items-center space-x-2">
+<span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-status-success/15 text-status-success font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success"></span>
+<span>Connected</span>
+</span>
+<button aria-label="TikTok settings" class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Identity & Platform Header -->
+<div class="flex items-start space-x-3.5 pt-1">
+<!-- TikTok Avatar Stack -->
+<div class="relative flex-shrink-0">
+<img class="w-12 h-12 rounded-xl object-cover" data-alt="Close-up creative portrait of Alex, a tech influencer wearing futuristic headphones against moody neon cyber lighting in deep violet and cyan tones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-AnPKKhsmnXqq4fbKyCWt3dXxTwKOGwGAq6LSVwH_Ttgru_T5eZQaWl0vLaeIUOfCJPtt4n_y4PCaXMJyxfmq0CcmS5fyREQTNC9NBrCzGT0TpcJzN2zmmCqJ5yGz7EH-s2gsJpMzmkWsYs9cr18yFheMsmCqBLdeDWeYjdIz0uEIKk6N80Afr8dZ8apiURfSauHLZu8Z1zU2ubqNSNWkd07uqx_rvGkW-FpSyQwjLRnCFMGOxsvwKg"/>
+<div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-md bg-[#000000] flex items-center justify-center shadow">
+<svg class="w-3.5 h-3.5" fill="none" viewbox="0 0 24 24">
+<path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 1 0 6.34 6.34V9.05a8.27 8.27 0 0 0 4.77 1.48V7.12c-.34 0-.68-.14-1-.43z" fill="#00F2EA"></path>
+<path d="M19.59 5.69a4.83 4.83 0 0 1-3.77-4.25V1h-2v.44a4.83 4.83 0 0 0 3.77 4.25h2z" fill="#FE2C55"></path>
+</svg>
+</div>
+</div>
+<!-- Account Details -->
+<div class="flex-1 min-w-0">
+<div class="flex items-center space-x-1.5">
+<h2 class="font-headline-md text-headline-md text-text-primary truncate">TikTok</h2>
+<span class="material-symbols-outlined text-platform-tiktok-cyan text-[16px]" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+<p class="font-label-md text-label-md text-text-primary">@alexcreates</p>
+<p class="font-caption text-caption text-text-secondary truncate">142.8K followers • Clip Source (Auto-import)</p>
+</div>
+</div>
+<!-- Metric & Sync Telemetry Pill -->
+<div class="bg-surface-container rounded-xl p-3 flex items-center justify-between text-text-secondary">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-[18px] text-platform-tiktok-cyan">history</span>
+<div class="flex flex-col">
+<span class="font-caption text-caption text-text-primary">Synced 12m ago</span>
+<span class="font-label-sm text-label-sm text-text-secondary">48 master clips cataloged</span>
+</div>
+</div>
+<!-- Toggle: Auto Fetch -->
+<label class="flex items-center space-x-2 cursor-pointer select-none">
+<span class="font-label-sm text-label-sm text-text-primary">Auto-Fetch</span>
+<input checked="" class="sr-only peer" id="tiktok-toggle" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-primary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-container relative"></div>
+</label>
+</div>
+</div>
+</div>
+<!-- 2. YOUTUBE CARD (Connected Target Platform) -->
+<div class="relative bg-surface rounded-[20px] p-space-md shadow transition-all duration-300 hover:shadow-md">
+<div class="flex flex-col space-y-3">
+<!-- Top Status -->
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-surface-container-high text-text-secondary font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[13px]">call_split</span>
+<span>TARGET DESTINATION</span>
+</span>
+<div class="flex items-center space-x-2">
+<span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-status-success/15 text-status-success font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success"></span>
+<span>Connected</span>
+</span>
+<button aria-label="YouTube settings" class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Identity Header -->
+<div class="flex items-start space-x-3.5 pt-1">
+<div class="relative flex-shrink-0">
+<img class="w-12 h-12 rounded-xl object-cover" data-alt="Vibrant YouTube branding profile badge showing modern 3D geometric play button with metallic sheen and ambient red edge highlights on deep black" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAj_HAa201OQ_2epgktg66M5ddAdjG_h-1yGyGVLbZ5sIc08bVLLBIWBpCxKH9yCOZ_SKKS-iwbDKh-mpUs1wwW3gjeaZBFiP0DqW15L3ooVxb4HDXx2iR35mpboOousSAEggcSzfKN8OAKCJ4daLCHHZhKpXI6J3kfZfenj0EEQKwC4TXoJkkv9WKI5pJHBe88yimKcHhu3Ky2aFcuu9JNfzALjbQf3JQoVlbm024z60wrn2wS3GcHww"/>
+<div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-md bg-platform-youtube flex items-center justify-center shadow text-text-primary">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center space-x-1.5">
+<h2 class="font-headline-md text-headline-md text-text-primary truncate">YouTube</h2>
+<span class="material-symbols-outlined text-platform-youtube text-[16px]" style="font-variation-settings: 'FILL' 1;">smart_display</span>
+</div>
+<p class="font-label-md text-label-md text-text-primary truncate">Alex Tech Shorts <span class="text-text-secondary font-caption">(@alexcreates_yt)</span></p>
+<p class="font-caption text-caption text-text-secondary truncate">28.4K subscribers • Publishes as Shorts</p>
+</div>
+</div>
+<!-- Syndication Config Line -->
+<div class="bg-surface-container rounded-xl p-3 flex items-center justify-between text-text-secondary">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-[18px] text-status-success">check_circle</span>
+<div class="flex flex-col">
+<span class="font-caption text-caption text-text-primary">Syndication Active</span>
+<span class="font-label-sm text-label-sm text-text-secondary">Shorts tagging: #shorts #tech</span>
+</div>
+</div>
+<button class="font-label-sm text-label-sm text-primary hover:text-primary-fixed transition-colors underline-offset-4 hover:underline py-1 px-2">
+            Re-auth
+          </button>
+</div>
+</div>
+</div>
+<!-- 3. INSTAGRAM CARD (Unconnected Target Platform) -->
+<div class="relative bg-surface rounded-[20px] p-space-md shadow transition-all duration-300">
+<div class="flex flex-col space-y-3.5">
+<!-- Top Status -->
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-surface-container-high text-text-secondary font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[13px]">call_split</span>
+<span>TARGET DESTINATION</span>
+</span>
+<span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-surface-container-highest text-text-secondary font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span>Unlinked</span>
+</span>
+</div>
+<!-- Identity & Platform Intro -->
+<div class="flex items-start space-x-3.5 pt-1">
+<!-- Instagram Gradient Avatar Plate -->
+<div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-platform-instagram-start via-platform-instagram-mid to-platform-instagram-end flex items-center justify-center shadow-md flex-shrink-0 text-text-primary">
+<span class="material-symbols-outlined text-[26px]">photo_camera</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center space-x-1.5">
+<h2 class="font-headline-md text-headline-md text-text-primary">Instagram</h2>
+</div>
+<p class="font-label-md text-label-md text-text-secondary">Publishes as Instagram Reels</p>
+<p class="font-caption text-caption text-text-secondary mt-0.5">
+              Connect Creator or Business account to enable 9:16 Reels cross-posting.
+            </p>
+</div>
+</div>
+<!-- Connect Action Banner -->
+<div class="bg-surface-container-low rounded-xl p-3 flex flex-col space-y-2">
+<div class="flex items-center space-x-2 text-text-secondary font-caption text-caption">
+<span class="material-symbols-outlined text-[16px] text-tertiary">info</span>
+<span>Meta Graph API v19.0 token authorization required</span>
+</div>
+<button class="w-full h-12 min-h-[48px] rounded-xl bg-gradient-to-r from-[#7C5CFF] to-[#B14CFF] text-text-primary font-label-md text-label-md flex items-center justify-center space-x-2 shadow-[0_4px_20px_rgba(124,92,255,0.35)] active:scale-[0.98] transition-transform" id="connect-instagram-btn">
+<span class="material-symbols-outlined text-[20px]">add_link</span>
+<span>+ Connect Instagram</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Pipeline Rules & Security Banner -->
+<section class="bg-surface-container-low rounded-[20px] p-space-md space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<div class="w-7 h-7 rounded-lg bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[17px]">tune</span>
+</div>
+<h3 class="font-label-md text-label-md text-text-primary">Pipeline Engine Rules</h3>
+</div>
+<span class="font-label-sm text-label-sm text-primary">Defaults</span>
+</div>
+<!-- Feature Row Indicators -->
+<div class="grid grid-cols-1 gap-2 pt-1 font-caption text-caption">
+<div class="flex items-center justify-between bg-surface-container px-3 py-2 rounded-lg">
+<div class="flex items-center space-x-2 text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-status-success">water_drop</span>
+<span>Automatic Watermark Removal</span>
+</div>
+<span class="text-status-success font-label-sm text-label-sm">Active</span>
+</div>
+<div class="flex items-center justify-between bg-surface-container px-3 py-2 rounded-lg">
+<div class="flex items-center space-x-2 text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-primary">hd</span>
+<span>Source Ingestion Bitrate</span>
+</div>
+<span class="text-text-primary font-label-sm text-label-sm">1080p Ultra HD</span>
+</div>
+<div class="flex items-center justify-between bg-surface-container px-3 py-2 rounded-lg">
+<div class="flex items-center space-x-2 text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-tertiary">lock</span>
+<span>Credential Protocol</span>
+</div>
+<span class="text-text-secondary font-label-sm text-label-sm">OAuth 2.0 Encrypted</span>
+</div>
+</div>
+</section>
+</div>
+<script>
+  // Micro-interaction for Instagram Connect simulation & active tab highlight
+  document.addEventListener('DOMContentLoaded', () => {
+    // Reflect Connect tab active status in app shell bottom navigation
+    const navLinks = document.querySelectorAll('nav a');
+    navLinks.forEach(link => {
+      if (link.getAttribute('data-path') === 'connect') {
+        link.classList.remove('text-text-secondary');
+        link.classList.add('text-primary-container', 'relative', 'after:content-[""]', 'after:absolute', 'after:bottom-1', 'after:w-1', 'after:h-1', 'after:rounded-full', 'after:bg-primary-container');
+      } else {
+        link.classList.remove('text-primary-container', 'relative', 'after:content-[""]', 'after:absolute', 'after:bottom-1', 'after:w-1', 'after:h-1', 'after:rounded-full', 'after:bg-primary-container');
+        link.classList.add('text-text-secondary');
+      }
+    });
+
+    const connectBtn = document.getElementById('connect-instagram-btn');
+    if (connectBtn) {
+      connectBtn.addEventListener('click', () => {
+        connectBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Authenticating via Meta...</span>';
+        setTimeout(() => {
+          connectBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">done</span><span>Connected @alex_reels</span>';
+          connectBtn.classList.remove('bg-gradient-to-r', 'from-[#7C5CFF]', 'to-[#B14CFF]');
+          connectBtn.classList.add('bg-status-success/20', 'text-status-success');
+        }, 1200);
+      });
+    }
+  });
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-4px_24px_rgba(0,0,0,0.6)]" data-active-classes="text-primary-container relative after:content-[''] after:absolute after:bottom-1 after:w-1 after:h-1 after:rounded-full after:bg-primary-container"><div class="h-16 px-gutter flex items-center justify-between"><a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] px-space-xs text-text-secondary transition-all hover:text-text-primary" data-path="home" href="#"><span class="material-symbols-outlined text-[24px]">dashboard</span><span class="font-label-sm text-label-sm mt-0.5">Home</span></a><a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] px-space-xs text-text-secondary transition-all hover:text-text-primary" data-path="posts" href="#"><span class="material-symbols-outlined text-[24px]">movie</span><span class="font-label-sm text-label-sm mt-0.5">Posts</span></a><a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] px-space-xs text-text-secondary transition-all hover:text-text-primary" data-path="connect" href="#"><span class="material-symbols-outlined text-[24px]">sync_alt</span><span class="font-label-sm text-label-sm mt-0.5">Connect</span></a><a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] px-space-xs text-text-secondary transition-all hover:text-text-primary" data-path="insights" href="#"><span class="material-symbols-outlined text-[24px]">monitoring</span><span class="font-label-sm text-label-sm mt-0.5">Insights</span></a><a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] px-space-xs text-text-secondary transition-all hover:text-text-primary" data-path="profile" href="#"><span class="material-symbols-outlined text-[24px]">account_circle</span><span class="font-label-sm text-label-sm mt-0.5">Profile</span></a></div></nav></body></html>
