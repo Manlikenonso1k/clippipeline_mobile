@@ -1,5 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
@@ -51,6 +52,7 @@ type Cell =
 interface Post {
   id: number;
   status: Status;
+  thumbnail: string | null;
   meta: string;
   title: string;
   body: string;
@@ -75,6 +77,7 @@ function toCard(p: ApiPost): Post {
   return {
     id: p.id,
     status: postStatus(p),
+    thumbnail: p.thumbnail ?? null,
     meta: `${timeAgo(p.published_at)} • Master TikTok`,
     title: p.title || 'Untitled clip',
     body: captionBody(p.caption),
@@ -287,6 +290,7 @@ function Thumbnail({ post }: { post: Post }) {
 
   return (
     <View style={s.thumb}>
+      {post.thumbnail ? <Image source={{ uri: post.thumbnail }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} /> : null}
       <LinearGradient colors={['rgba(148,125,255,0.35)', 'rgba(0,0,0,0.6)'] as const} style={StyleSheet.absoluteFill} />
       {processing ? <BreathingOverlay /> : null}
 

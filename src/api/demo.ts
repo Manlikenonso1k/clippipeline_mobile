@@ -42,6 +42,7 @@ export const DEMO_POSTS: Post[] = [
     title: '3 editing tricks that doubled my retention',
     caption: 'The hook is everything — here’s how I open every clip now. #editing #creator #retention',
     video_url: 'https://clippipeline.app/demo/101.mp4',
+    thumbnail: 'https://picsum.photos/seed/clip101/360/640',
     tiktok_id: '7390000000000000001',
     published_at: iso(2),
     distributions: [
@@ -60,6 +61,7 @@ export const DEMO_POSTS: Post[] = [
     title: 'Behind the scenes of a 1M view clip',
     caption: 'Raw footage → polished short in 8 minutes. #bts #shorts',
     video_url: 'https://clippipeline.app/demo/102.mp4',
+    thumbnail: 'https://picsum.photos/seed/clip102/360/640',
     tiktok_id: '7390000000000000002',
     published_at: iso(4),
     distributions: [
@@ -74,6 +76,7 @@ export const DEMO_POSTS: Post[] = [
     title: 'Why your reels aren’t getting views',
     caption: 'Fix these 3 settings today. #instagram #reels #growth',
     video_url: 'https://clippipeline.app/demo/103.mp4',
+    thumbnail: 'https://picsum.photos/seed/clip103/360/640',
     tiktok_id: '7390000000000000003',
     published_at: iso(6),
     distributions: [
@@ -87,6 +90,7 @@ export const DEMO_POSTS: Post[] = [
     title: 'My full cross-posting workflow',
     caption: 'Post once, everywhere. Here’s the whole pipeline. #workflow #automation',
     video_url: 'https://clippipeline.app/demo/104.mp4',
+    thumbnail: 'https://picsum.photos/seed/clip104/360/640',
     tiktok_id: '7390000000000000004',
     published_at: iso(9),
     distributions: [

@@ -1,5 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -542,6 +543,7 @@ export default function Insights() {
                 style={[s.card, s.clip]}
               >
                 <View style={s.thumb}>
+                  {p.thumbnail ? <Image source={{ uri: p.thumbnail }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} /> : null}
                   <LinearGradient colors={['rgba(148,125,255,0.35)', 'rgba(19,19,23,0.8)'] as const} style={StyleSheet.absoluteFill} />
                   <View style={[s.rank, rank === 1 ? { backgroundColor: C.primaryContainer } : { backgroundColor: C.raised }]}>
                     <Text style={[s.label, { color: C.text, fontWeight: '700' }]}>{rank}</Text>

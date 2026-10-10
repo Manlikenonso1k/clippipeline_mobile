@@ -1,5 +1,6 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -187,6 +188,7 @@ export default function PostDetails() {
         <View style={s.glow} pointerEvents="none" />
         <View style={s.videoCard}>
           <View style={s.stage}>
+            {post?.thumbnail ? <Image source={{ uri: post.thumbnail }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} /> : null}
             <LinearGradient colors={['#947DFF55', '#0E0E1200', '#0E0E12']} style={StyleSheet.absoluteFill} />
             <View style={s.badges}>
               <View style={s.badge}>

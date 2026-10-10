@@ -49,6 +49,7 @@ export interface Post {
   title: string;
   caption: string | null;
   video_url: string;
+  thumbnail: string | null;
   tiktok_id: string | null;
   published_at: string | null;
   distributions: PostDistribution[];
