@@ -49,3 +49,6 @@ graphify-out/
 expo-web.log
 expo-web.error.log
 *.error.log
+
+# lockfile excluded from EAS build (npm version drift); EAS uses npm install
+package-lock.json
