@@ -4,6 +4,10 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { usePosts, useSocialAccounts } from '@/api/hooks';
+import type { Platform } from '@/api/types';
+import { AnimatedPressable, BounceIcon, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { formatCount, formatDate } from '@/lib/format';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
 // Kinetic Obsidian tokens (see "connect step 7/DESIGN.md")
@@ -51,8 +55,10 @@ const PIPELINE_RULES = [
 type IgState = 'idle' | 'authenticating' | 'connected';
 
 export default function ConnectScreen() {
-  const [igState, setIgState] = useState<IgState>('idle');
+  const accountsQ = useSocialAccounts();
+  const postsQ = usePosts('all');
   const [autoFetch, setAutoFetch] = useState(true);
+  const [pending, setPending] = useState<Platform | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -61,14 +67,30 @@ export default function ConnectScreen() {
     };
   }, []);
 
-  function connectInstagram() {
-    if (igState !== 'idle') return;
-    setIgState('authenticating');
-    // Simulated Meta OAuth handshake, mirrors the design's 1.2s prototype delay.
-    timer.current = setTimeout(() => setIgState('connected'), 1200);
-  }
+  const accounts = accountsQ.data ?? [];
+  const acct = (p: Platform) => accounts.find((a) => a.provider === p);
+  const isOn = (p: Platform) => !!acct(p)?.connected;
+  const tt = acct('tiktok');
+  const yt = acct('youtube');
+  const ig = acct('instagram');
+  const ttOn = isOn('tiktok');
+  const ytOn = isOn('youtube');
+  const igOn = isOn('instagram');
+  const handleOf = (h: string | null | undefined) => (h ? `@${h.replace(/^@/, '')}` : '');
+  const linkedCount = (['tiktok', 'youtube', 'instagram'] as Platform[]).filter(isOn).length;
+  const clipCount = postsQ.data?.length ?? 0;
+  const loading = accountsQ.isLoading;
 
-  const linkedCount = igState === 'connected' ? 3 : 2;
+  // OAuth for each platform happens server-side; here we only show a brief authenticating state and
+  // then re-read the real connection status from the API.
+  function connect(p: Platform) {
+    if (pending) return;
+    setPending(p);
+    timer.current = setTimeout(() => {
+      accountsQ.refetch().finally(() => setPending(null));
+    }, 1200);
+  }
+  const stateFor = (p: Platform): IgState => (pending === p ? 'authenticating' : isOn(p) ? 'connected' : 'idle');
 
   return (
     <SafeAreaView style={s.safe}>
@@ -104,7 +126,7 @@ export default function ConnectScreen() {
           <View style={s.syncLeft}>
             <PulseDot color={C.success} />
             <Text style={s.syncCount} numberOfLines={1}>
-              {linkedCount} of 3 Connected
+              {loading ? '– of 3' : `${linkedCount} of 3`} Connected
             </Text>
             <Text style={s.syncSep}>•</Text>
             <Text style={s.syncSub} numberOfLines={1}>
@@ -116,6 +138,14 @@ export default function ConnectScreen() {
             <Text style={s.velocityText}>High Velocity</Text>
           </View>
         </View>
+
+        {accountsQ.isError && !accountsQ.data ? (
+          <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" />
+        ) : null}
+        {loading ? <Skeleton height={14} width="60%" /> : null}
+        {!loading && !accountsQ.isError && accounts.length === 0 ? (
+          <InlineMessage icon="link-off" text="No accounts linked yet. Connect TikTok to get started." />
+        ) : null}
 
         <View style={s.stack}>
           {/* 1. TikTok: mandatory source */}
@@ -131,7 +161,7 @@ export default function ConnectScreen() {
             <RowWrap>
               <Tag icon="input" label="SOURCE ACCOUNT • REQUIRED" color={C.cyan} bg={`${C.cyan}26`} />
               <View style={s.rowEnd}>
-                <StatusPill label="Connected" color={C.success} />
+                <StatusPill label={ttOn ? 'Connected' : 'Unlinked'} color={ttOn ? C.success : C.muted} />
                 <MenuButton label="TikTok settings" />
               </View>
             </RowWrap>
@@ -145,9 +175,9 @@ export default function ConnectScreen() {
                   <Text style={s.platformName}>TikTok</Text>
                   <MaterialIcons name="verified" size={16} color={C.cyan} />
                 </View>
-                <Text style={s.handle}>@alexcreates</Text>
+                <Text style={s.handle}>{ttOn && tt?.handle ? handleOf(tt.handle) : 'Not connected'}</Text>
                 <Text style={s.meta} numberOfLines={1}>
-                  142.8K followers • Clip Source (Auto-import)
+                  {ttOn ? `${formatCount(tt?.follower_count ?? 0)} followers • Clip Source (Auto-import)` : 'Required to import your master clips'}
                 </Text>
               </View>
             </View>
@@ -155,8 +185,10 @@ export default function ConnectScreen() {
             <View style={s.inset}>
               <MaterialIcons name="history" size={18} color={C.cyan} />
               <View style={s.insetCopy}>
-                <Text style={s.insetTitle}>Synced 12m ago</Text>
-                <Text style={s.insetSub}>48 master clips cataloged</Text>
+                <Text style={s.insetTitle}>
+                  {ttOn ? (tt?.expires_at ? `Token valid until ${formatDate(tt.expires_at)}` : 'Source active') : 'Waiting for connection'}
+                </Text>
+                <Text style={s.insetSub}>{clipCount} master {clipCount === 1 ? 'clip' : 'clips'} cataloged</Text>
               </View>
               <View style={s.toggleWrap}>
                 <Text style={s.toggleLabel}>Auto-Fetch</Text>
@@ -170,6 +202,9 @@ export default function ConnectScreen() {
                 />
               </View>
             </View>
+            {!ttOn && !loading ? (
+              <ConnectButton state={stateFor('tiktok')} onPress={() => connect('tiktok')} label="TikTok" />
+            ) : null}
           </View>
 
           {/* 2. YouTube: connected target */}
@@ -177,7 +212,7 @@ export default function ConnectScreen() {
             <RowWrap>
               <Tag icon="call-split" label="TARGET DESTINATION" color={C.muted} bg={C.containerHigh} />
               <View style={s.rowEnd}>
-                <StatusPill label="Connected" color={C.success} />
+                <StatusPill label={ytOn ? 'Connected' : 'Unlinked'} color={ytOn ? C.success : C.muted} />
                 <MenuButton label="YouTube settings" />
               </View>
             </RowWrap>
@@ -192,24 +227,34 @@ export default function ConnectScreen() {
                   <FontAwesome5 name="youtube" size={13} color={C.youtube} />
                 </View>
                 <Text style={s.channelLine} numberOfLines={1}>
-                  Alex Tech Shorts <Text style={s.handleMuted}>(@alexcreates_yt)</Text>
+                  {ytOn && yt?.handle ? handleOf(yt.handle) : 'Not connected'}
                 </Text>
                 <Text style={s.meta} numberOfLines={1}>
-                  28.4K subscribers • Publishes as Shorts
+                  {ytOn ? `${formatCount(yt?.follower_count ?? 0)} subscribers • Publishes as Shorts` : 'Connect a channel to publish Shorts'}
                 </Text>
               </View>
             </View>
 
-            <View style={s.inset}>
-              <MaterialIcons name="check-circle" size={18} color={C.success} />
-              <View style={s.insetCopy}>
-                <Text style={s.insetTitle}>Syndication Active</Text>
-                <Text style={s.insetSub}>Shorts tagging: #shorts #tech</Text>
+            {ytOn ? (
+              <View style={s.inset}>
+                <MaterialIcons name="check-circle" size={18} color={C.success} />
+                <View style={s.insetCopy}>
+                  <Text style={s.insetTitle}>Syndication Active</Text>
+                  <Text style={s.insetSub}>{yt?.expires_at ? `Token valid until ${formatDate(yt.expires_at)}` : 'Publishing as Shorts'}</Text>
+                </View>
+                <AnimatedPressable accessibilityRole="button" style={s.linkBtn} onPress={() => connect('youtube')}>
+                  <Text style={s.linkText}>Re-auth</Text>
+                </AnimatedPressable>
               </View>
-              <Pressable accessibilityRole="button" style={({ pressed }) => [s.linkBtn, pressed && s.pressed]}>
-                <Text style={s.linkText}>Re-auth</Text>
-              </Pressable>
-            </View>
+            ) : (
+              <View style={s.banner}>
+                <View style={s.bannerRow}>
+                  <MaterialIcons name="info" size={16} color={C.warning} />
+                  <Text style={s.bannerText}>Google authorization required</Text>
+                </View>
+                {!loading ? <ConnectButton state={stateFor('youtube')} onPress={() => connect('youtube')} label="YouTube" /> : null}
+              </View>
+            )}
           </View>
 
           {/* 3. Instagram: unlinked target */}
@@ -219,7 +264,7 @@ export default function ConnectScreen() {
               <View style={s.rowEnd}>
                 <View style={s.unlinkedPill}>
                   <View style={s.unlinkedDot} />
-                  <Text style={s.unlinkedText}>{igState === 'connected' ? 'Connected' : 'Unlinked'}</Text>
+                  <Text style={s.unlinkedText}>{igOn ? 'Connected' : 'Unlinked'}</Text>
                 </View>
               </View>
             </RowWrap>
@@ -235,17 +280,21 @@ export default function ConnectScreen() {
               </LinearGradient>
               <View style={s.identityCopy}>
                 <Text style={s.platformName}>Instagram</Text>
-                <Text style={s.igSub}>Publishes as Instagram Reels</Text>
-                <Text style={s.meta}>Connect Creator or Business account to enable 9:16 Reels cross-posting.</Text>
+                <Text style={s.igSub}>{igOn && ig?.handle ? handleOf(ig.handle) : 'Publishes as Instagram Reels'}</Text>
+                <Text style={s.meta}>
+                  {igOn
+                    ? `${formatCount(ig?.follower_count ?? 0)} followers • Publishes as Reels`
+                    : 'Connect Creator or Business account to enable 9:16 Reels cross-posting.'}
+                </Text>
               </View>
             </View>
 
             <View style={s.banner}>
               <View style={s.bannerRow}>
-                <MaterialIcons name="info" size={16} color={C.warning} />
-                <Text style={s.bannerText}>Meta Graph API v19.0 token authorization required</Text>
+                <MaterialIcons name={igOn ? 'check-circle' : 'info'} size={16} color={igOn ? C.success : C.warning} />
+                <Text style={s.bannerText}>{igOn ? 'Reels syndication active' : 'Meta Graph API token authorization required'}</Text>
               </View>
-              <ConnectButton state={igState} onPress={connectInstagram} />
+              {!loading ? <ConnectButton state={stateFor('instagram')} onPress={() => connect('instagram')} label="Instagram" handle={igOn ? handleOf(ig?.handle) : ''} /> : null}
             </View>
           </View>
         </View>
@@ -290,7 +339,9 @@ export default function ConnectScreen() {
               }}
               style={s.tab}
             >
-              <MaterialIcons name={tab.icon} size={24} color={color} />
+              <BounceIcon active={active}>
+                <MaterialIcons name={tab.icon} size={24} color={color} />
+              </BounceIcon>
               <Text style={[s.tabLabel, { color }]}>{tab.label}</Text>
               {active ? <View style={s.tabIndicator} /> : null}
             </Pressable>
@@ -325,7 +376,7 @@ function PulseDot({ color, size = 10 }: { color: string; size?: number }) {
 }
 
 // Connect button: primary gradient with a breathing glow. Turns into a status chip once connected.
-function ConnectButton({ state, onPress }: { state: IgState; onPress: () => void }) {
+function ConnectButton({ state, onPress, label, handle }: { state: IgState; onPress: () => void; label: string; handle?: string }) {
   const glow = useSharedValue(0.35);
 
   useEffect(() => {
@@ -339,7 +390,7 @@ function ConnectButton({ state, onPress }: { state: IgState; onPress: () => void
     return (
       <View style={[s.connectBtn, s.connectedBtn]}>
         <MaterialIcons name="done" size={18} color={C.success} />
-        <Text style={[s.connectText, { color: C.success }]}>Connected @alex_reels</Text>
+        <Text style={[s.connectText, { color: C.success }]}>{handle ? `Connected ${handle}` : `${label} connected`}</Text>
       </View>
     );
   }
@@ -349,13 +400,13 @@ function ConnectButton({ state, onPress }: { state: IgState; onPress: () => void
   return (
     <View style={s.connectWrap}>
       {state === 'idle' ? <Animated.View style={[s.connectGlow, glowStyle]} /> : null}
-      <Pressable
+      <AnimatedPressable
         accessibilityRole="button"
-        accessibilityLabel="Connect Instagram"
+        accessibilityLabel={`Connect ${label}`}
         accessibilityState={{ busy, disabled: busy }}
         disabled={busy}
         onPress={onPress}
-        style={({ pressed }) => [s.connectBtn, pressed && !busy && s.pressed]}
+        style={s.connectBtn}
       >
         <LinearGradient
           colors={[C.metaViolet, C.metaPurple]}
@@ -366,15 +417,15 @@ function ConnectButton({ state, onPress }: { state: IgState; onPress: () => void
         {busy ? (
           <>
             <ActivityIndicator size="small" color={C.text} />
-            <Text style={s.connectText}>Authenticating via Meta...</Text>
+            <Text style={s.connectText}>Authenticating...</Text>
           </>
         ) : (
           <>
             <MaterialIcons name="add-link" size={20} color={C.text} />
-            <Text style={s.connectText}>+ Connect Instagram</Text>
+            <Text style={s.connectText}>{`+ Connect ${label}`}</Text>
           </>
         )}
-      </Pressable>
+      </AnimatedPressable>
     </View>
   );
 }

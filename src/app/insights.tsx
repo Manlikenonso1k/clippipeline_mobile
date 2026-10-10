@@ -1,9 +1,13 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
+import { useOverview, usePosts } from '@/api/hooks';
+import { AnimatedPressable, BounceIcon, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { buildChart, latestAnalytic, shortDate, totalsFor, trendDelta } from '@/components/post-utils';
+import { formatCount, formatWatchTime } from '@/lib/format';
 import Animated, {
   Easing,
   SharedValue,
@@ -40,13 +44,9 @@ const C = {
   igEnd: '#8134AF',
 } as const;
 
-// ---- Chart data: exact path data from the design's 340x160 viewBox ----
+// ---- Chart geometry: 340x160 viewBox; paths are generated from overview.trend ----
 const CHART_H = 176;
-const PEAK_X = 270;
-const PRIMARY_D = 'M 0 120 C 35 105, 55 92, 85 88 C 120 82, 145 98, 175 70 C 210 42, 235 25, 270 14 C 300 5, 325 15, 340 12';
-const TIKTOK_D = 'M 0 135 C 35 125, 60 110, 85 105 C 120 98, 145 115, 175 92 C 210 68, 235 55, 270 42 C 305 32, 325 38, 340 30';
-const PRIMARY_AREA_D = `${PRIMARY_D} L 340 150 L 0 150 Z`;
-const TIKTOK_AREA_D = `${TIKTOK_D} L 340 150 L 0 150 Z`;
+const FLAT_D = 'M 0 140 L 340 140';
 const CURVE_LEN = 390;
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
@@ -57,50 +57,17 @@ const SPARKS = {
   shares: { color: C.success, fill: C.success, d: 'M0 25 L 20 22 L 45 10 L 70 14 L 100 3' },
 } as const;
 
-const KPIS = [
-  { key: 'views', icon: 'visibility', tint: C.primary, label: 'Total Views', value: '2.4M', delta: '+14.2%' },
-  { key: 'likes', icon: 'favorite', tint: C.danger, label: 'Likes', value: '385K', delta: '+8.5%' },
-  { key: 'comments', icon: 'forum', tint: C.warning, label: 'Comments', value: '14.8K', delta: '+19.1%' },
-  { key: 'shares', icon: 'share', tint: C.success, label: 'Shares', value: '42.3K', delta: '+31.0%' },
+const KPI_DEFS = [
+  { key: 'views', icon: 'visibility', tint: C.primary, label: 'Total Views' },
+  { key: 'likes', icon: 'favorite', tint: C.danger, label: 'Likes' },
+  { key: 'comments', icon: 'forum', tint: C.warning, label: 'Comments' },
+  { key: 'shares', icon: 'share', tint: C.success, label: 'Shares' },
 ] as const;
 
-const CLIPS = [
-  {
-    rank: 1,
-    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7WWlYlSg5dzfhlZs_w5-64A92dKEdKfnVSxOaNsaf8_Noa1ga6XKJINYegdi7idNkrdOYugNTBq9bzX1M-23l8zvLhNqZsMq2vudVb5ABMsbWEEZJeAeTozNJV3t7PGUnCVn_2Ep4MMOiH-hukP8d-8bDuEVyHpetL7ji6bNa3KKvAABKH-c8k9SS-wu_931w17iMriLfiB1P4R9bT16_cDaHUmzD1qTKTcs63x8WQKXZLLM08WUnlw',
-    dur: '0:42',
-    title: '5 productivity tools that felt illegal to know before this...',
-    meta: 'Oct 18 • Automated syndication',
-    views: '1.2M',
-    retention: '94%',
-    tt: '680K',
-    yt: '340K',
-    ig: '180K',
-  },
-  {
-    rank: 2,
-    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBcPLf_b2O0IzhMAQt8kdWKv7po7imgbmIqKFsohjaVBcVUc4QvNhjwC7Dn5pC6YK2esIk2DOG8diSFoqUItwsl0vEK_XW0kaF7Ll5MyzlrbUGqdn_VBS_G5OSqijwNTfH16UVjUy1HmkaACl0wlVV0l9Zrn6KEv_Q7x8ZLWErxkI4b2DmjBF4MMjWWM9H9BHzXGHRvORV8KfbDogo82qomVfrLQryNFY7NZiBa_PHRfJP82BExIbGFpQ',
-    dur: '0:58',
-    title: 'How I automated my entire content stack with one server script',
-    meta: 'Oct 24 • AI Captions + Soundsync',
-    views: '740K',
-    retention: '81%',
-    tt: '410K',
-    yt: '220K',
-    ig: '110K',
-  },
-  {
-    rank: 3,
-    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDx9TK2EGklOSic4przETswe5zk5beXHgD_MhHJPDml4ECIMl6XE98wygal4zaVqRkagN9unH_W1nAfoNe0upRNj3NueoRIwMLjCD0Ir0AlIreb3iisxQF9c64FIWuwgYSDPFWXs3Ay85hzwPcHjCLjhzMNcIJSmTeQ5jysfaUpeTEFxwsokA4QDAQnUJCtUJzyYgCKgI0lGLOQn-CdURZYIfAL9SZ1Ektcm820nLx-naTwbE_0EjKfKw',
-    dur: '0:35',
-    title: 'Why 99% of podcasts fail in their first 3 episodes (and the fix)',
-    meta: 'Oct 12 • Smart hook reframe',
-    views: '460K',
-    retention: '76%',
-    tt: '190K',
-    yt: '185K',
-    ig: '85K',
-  },
+const PERIODS = [
+  { label: 'Last 30 Days', api: '30d', days: '30-Day' },
+  { label: 'Last 7 Days', api: '7d', days: '7-Day' },
+  { label: 'This Quarter (Q4)', api: '90d', days: '90-Day' },
 ] as const;
 
 const PLATFORMS = ['All Platforms', 'TikTok', 'YouTube', 'Instagram'] as const;
@@ -148,7 +115,79 @@ function PlatformDot({ kind }: { kind: 'tt' | 'yt' | 'ig' }) {
 export default function Insights() {
   const [platform, setPlatform] = useState<Platform>('All Platforms');
   const [periodOpen, setPeriodOpen] = useState(false);
-  const [period, setPeriod] = useState('Last 30 Days');
+  const [period, setPeriod] = useState<string>('Last 30 Days');
+  const periodDef = PERIODS.find((p) => p.label === period) ?? PERIODS[0];
+
+  const overviewQ = useOverview(periodDef.api);
+  const postsQ = usePosts('all');
+  const ov = overviewQ.data;
+  const ovLoading = overviewQ.isLoading;
+  const posts = useMemo(() => postsQ.data ?? [], [postsQ.data]);
+
+  const trend = useMemo(() => ov?.trend ?? [], [ov?.trend]);
+  const series = useMemo(() => trend.map((x) => x.views ?? 0), [trend]);
+
+  // Platform split from per-post analytics.
+  const split = useMemo(() => {
+    const out = { tt: 0, yt: 0, ig: 0 };
+    let watch = 0;
+    posts.forEach((p) => {
+      out.tt += latestAnalytic(p, 'tiktok')?.views ?? 0;
+      out.yt += latestAnalytic(p, 'youtube')?.views ?? 0;
+      out.ig += latestAnalytic(p, 'instagram')?.views ?? 0;
+      watch += totalsFor(p).watch;
+    });
+    return { ...out, total: out.tt + out.yt + out.ig, watch };
+  }, [posts]);
+  const pct = (n: number) => (split.total > 0 ? Math.round((n / split.total) * 100) : 0);
+
+  const primary = useMemo(() => buildChart(series, { top: 14, bottom: 140 }), [series]);
+  const ttShare = split.total > 0 ? split.tt / split.total : 0;
+  // Secondary curve is scaled to the same max so it sits under the primary line.
+  const primaryD = primary?.d ?? FLAT_D;
+  const primaryAreaD = `${primaryD} L 340 150 L 0 150 Z`;
+  const tiktokD = ttShare > 0 ? buildChart(series.map((v) => v * ttShare), { top: 14 + (1 - ttShare) * 126, bottom: 140 })?.d ?? FLAT_D : FLAT_D;
+  const tiktokAreaD = `${tiktokD} L 340 150 L 0 150 Z`;
+  const curveLen = primary?.len ?? CURVE_LEN;
+  const curveLenSv = useSharedValue(CURVE_LEN);
+  useEffect(() => {
+    curveLenSv.value = curveLen;
+  }, [curveLen, curveLenSv]);
+  const peakDate = primary ? shortDate(trend[primary.peak]?.date) : '';
+  const peakVal = primary ? formatCount(series[primary.peak] ?? 0) : '';
+  const axisLabels = useMemo(() => {
+    if (trend.length < 2) return [] as { label: string; idx: number }[];
+    return [0, 1, 2, 3, 4].map((k) => {
+      const idx = Math.round((k * (trend.length - 1)) / 4);
+      return { label: shortDate(trend[idx].date), idx };
+    });
+  }, [trend]);
+  const axisOnIdx = useMemo(() => {
+    if (!primary || !axisLabels.length) return -1;
+    let best = 0;
+    axisLabels.forEach((a, i) => {
+      if (Math.abs(a.idx - primary.peak) < Math.abs(axisLabels[best].idx - primary.peak)) best = i;
+    });
+    return best;
+  }, [primary, axisLabels]);
+  const delta = trendDelta(trend);
+  const rangeCaption =
+    trend.length >= 2
+      ? `${shortDate(trend[0].date)} – ${shortDate(trend[trend.length - 1].date)} • ${periodDef.days} Aggregation`
+      : `${periodDef.days} Aggregation`;
+
+  const topClips = useMemo(
+    () =>
+      posts
+        .map((p) => ({ p, t: totalsFor(p) }))
+        .sort((a, b) => b.t.views - a.t.views)
+        .slice(0, 3),
+    [posts],
+  );
+  const kpiValue = (k: (typeof KPI_DEFS)[number]['key']) =>
+    formatCount(k === 'views' ? ov?.total_views ?? 0 : k === 'likes' ? ov?.total_likes ?? 0 : k === 'comments' ? ov?.total_comments ?? 0 : ov?.total_shares ?? 0);
+  const boostMult = split.tt > 0 && split.total > split.tt ? split.total / split.tt : null;
+  const avgWatch = (ov?.total_views ?? 0) > 0 && split.watch > 0 ? formatWatchTime(split.watch / split.total) : '—';
 
   const chart = useSharedValue(0);
   const spark = useSharedValue(0);
@@ -166,14 +205,14 @@ export default function Insights() {
 
   const pingStyle = useAnimatedStyle(() => ({ opacity: 0.7 * (1 - ping.value), transform: [{ scale: 1 + ping.value * 2.2 }] }));
   const haloStyle = useAnimatedStyle(() => ({ opacity: 0.4 + pulse.value * 0.6 }));
-  const primaryLineProps = useAnimatedProps(() => ({ strokeDashoffset: CURVE_LEN * (1 - chart.value) }));
-  const tiktokLineProps = useAnimatedProps(() => ({ strokeDashoffset: CURVE_LEN * (1 - chart.value) }));
+  const primaryLineProps = useAnimatedProps(() => ({ strokeDashoffset: curveLenSv.value * (1 - chart.value) }));
+  const tiktokLineProps = useAnimatedProps(() => ({ strokeDashoffset: curveLenSv.value * (1 - chart.value) }));
   const primaryAreaProps = useAnimatedProps(() => ({ opacity: Math.min(1, Math.max(0, (chart.value - 0.55) / 0.45)) }));
   const tiktokAreaProps = useAnimatedProps(() => ({ opacity: Math.min(1, Math.max(0, (chart.value - 0.45) / 0.45)) }));
   const barW = (pct: number) => useAnimatedStyle(() => ({ width: `${pct * bars.value}%` })); // eslint-disable-line react-hooks/rules-of-hooks
-  const wTT = barW(52);
-  const wYT = barW(31);
-  const wIG = barW(17);
+  const wTT = barW(pct(split.tt));
+  const wYT = barW(pct(split.yt));
+  const wIG = barW(pct(split.ig));
 
   const dim = (p: 'tt' | 'yt' | 'ig') =>
     platform === 'All Platforms' ||
@@ -209,14 +248,14 @@ export default function Insights() {
           <View style={s.headRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.h1}>Insights</Text>
-              <Text style={s.caption}>Oct 1 – Oct 30 • 30-Day Aggregation</Text>
+              <Text style={s.caption}>{rangeCaption}</Text>
             </View>
             <View style={s.headActions}>
-              <Pressable style={s.periodBtn} onPress={() => setPeriodOpen((v) => !v)}>
+              <AnimatedPressable style={s.periodBtn} onPress={() => setPeriodOpen((v) => !v)}>
                 <MaterialIcons name="calendar-today" size={17} color={C.primary} />
                 <Text style={s.periodText}>{period}</Text>
                 <MaterialIcons name="expand-more" size={18} color={C.muted} />
-              </Pressable>
+              </AnimatedPressable>
               <Pressable style={s.shareBtn}>
                 <MaterialIcons name="ios-share" size={19} color={C.muted} />
               </Pressable>
@@ -224,7 +263,7 @@ export default function Insights() {
           </View>
           {periodOpen ? (
             <View style={s.popover}>
-              {['Last 30 Days', 'Last 7 Days', 'This Quarter (Q4)', 'Custom Range...'].map((p) => {
+              {PERIODS.map((x) => x.label).map((p) => {
                 const on = p === period;
                 return (
                   <Pressable
@@ -285,17 +324,28 @@ export default function Insights() {
               <View>
                 <Text style={s.label}>CROSS-CHANNEL REACH</Text>
                 <View style={s.baseline}>
-                  <Text style={s.statXl}>2.4M</Text>
+                  {ovLoading ? <Skeleton width={110} height={36} radius={8} /> : <Text style={s.statXl}>{formatCount(ov?.total_views ?? 0)}</Text>}
                   <Text style={[s.caption, { marginLeft: 8 }]}>Views</Text>
                 </View>
               </View>
-              <View style={s.growth}>
-                <MaterialIcons name="trending-up" size={15} color={C.success} />
-                <Text style={[s.label, { color: C.success }]}>+28.4%</Text>
-              </View>
+              {delta !== null ? (
+                <View style={[s.growth, delta < 0 && { backgroundColor: 'rgba(234,84,85,0.15)' }]}>
+                  <MaterialIcons name={delta < 0 ? 'trending-down' : 'trending-up'} size={15} color={delta < 0 ? C.danger : C.success} />
+                  <Text style={[s.label, { color: delta < 0 ? C.danger : C.success }]}>{`${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`}</Text>
+                </View>
+              ) : null}
             </View>
 
             <View style={s.chartBox}>
+              {!primary ? (
+                overviewQ.isError && !ov ? (
+                  <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" style={s.chartMsg} />
+                ) : ovLoading ? (
+                  <Skeleton height={CHART_H - 20} radius={12} style={s.chartMsg} />
+                ) : (
+                  <InlineMessage icon="show-chart" text="No activity yet for this period" style={s.chartMsg} />
+                )
+              ) : null}
               <Svg width="100%" height={CHART_H} viewBox="0 0 340 160" preserveAspectRatio="none" style={StyleSheet.absoluteFill}>
                 <Defs>
                   <SvgGradient id="insReachPrimary" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="160">
@@ -311,48 +361,52 @@ export default function Insights() {
                 {[30, 75, 120].map((y) => (
                   <Line key={y} x1={0} x2={340} y1={y} y2={y} stroke="#2A2A36" strokeOpacity={0.6} strokeWidth={0.8} strokeDasharray="3 4" />
                 ))}
-                <AnimatedPath d={TIKTOK_AREA_D} fill="url(#insReachTikTok)" animatedProps={tiktokAreaProps} />
+                <AnimatedPath d={tiktokAreaD} fill="url(#insReachTikTok)" animatedProps={tiktokAreaProps} />
                 <AnimatedPath
-                  d={TIKTOK_D}
+                  d={tiktokD}
                   fill="none"
                   stroke="#00F2EA"
                   strokeOpacity={0.6}
                   strokeWidth={1.5}
-                  strokeDasharray={CURVE_LEN}
+                  strokeDasharray={curveLen}
                   animatedProps={tiktokLineProps}
                 />
-                <AnimatedPath d={PRIMARY_AREA_D} fill="url(#insReachPrimary)" animatedProps={primaryAreaProps} />
+                <AnimatedPath d={primaryAreaD} fill="url(#insReachPrimary)" animatedProps={primaryAreaProps} />
                 <AnimatedPath
-                  d={PRIMARY_D}
+                  d={primaryD}
                   fill="none"
                   stroke={C.primary}
                   strokeWidth={2.8}
                   strokeLinecap="round"
-                  strokeDasharray={CURVE_LEN}
+                  strokeDasharray={curveLen}
                   animatedProps={primaryLineProps}
                 />
               </Svg>
               {/* Peak marker */}
-              <View style={[s.peakLine, { left: `${(PEAK_X / 340) * 100}%` }]} />
-              <View style={[s.peakAnchor, { left: `${(PEAK_X / 340) * 100}%`, top: ((14 / 160) * CHART_H) - 1 }]}>
-                <Animated.View style={[s.peakHalo, haloStyle]} />
-                <View style={s.peakDot} />
-              </View>
-              <View style={s.tooltip}>
-                <View style={s.pingWrap}>
-                  <Animated.View style={[s.pingRing, pingStyle]} />
-                  <View style={s.pingCore} />
-                </View>
-                <Text style={[s.label, { color: C.text }]}>Oct 24</Text>
-                <Text style={s.caption}>•</Text>
-                <Text style={[s.label, { color: C.primary, fontWeight: '700' }]}>142.5K</Text>
-              </View>
+              {primary ? (
+                <>
+                  <View style={[s.peakLine, { left: `${(primary.peakX / 340) * 100}%`, top: (primary.peakY / 160) * CHART_H }]} />
+                  <View style={[s.peakAnchor, { left: `${(primary.peakX / 340) * 100}%`, top: (primary.peakY / 160) * CHART_H - 1 }]}>
+                    <Animated.View style={[s.peakHalo, haloStyle]} />
+                    <View style={s.peakDot} />
+                  </View>
+                  <View style={s.tooltip}>
+                    <View style={s.pingWrap}>
+                      <Animated.View style={[s.pingRing, pingStyle]} />
+                      <View style={s.pingCore} />
+                    </View>
+                    <Text style={[s.label, { color: C.text }]}>{peakDate}</Text>
+                    <Text style={s.caption}>•</Text>
+                    <Text style={[s.label, { color: C.primary, fontWeight: '700' }]}>{peakVal}</Text>
+                  </View>
+                </>
+              ) : null}
             </View>
 
             <View style={[s.rowBetween, { paddingHorizontal: 4 }]}>
-              {['Oct 1', 'Oct 8', 'Oct 15', 'Oct 24', 'Oct 30'].map((d) => (
-                <Text key={d} style={[s.caption, d === 'Oct 24' ? { color: C.primary, fontWeight: '600' } : null]}>
-                  {d}
+              {axisLabels.map((a, i) => (
+                <Text key={`${a.idx}-${i}`} style={[s.caption, i === axisOnIdx ? { color: C.primary, fontWeight: '600' } : null]}>
+                  {a.label}
                 </Text>
               ))}
             </View>
@@ -360,9 +414,9 @@ export default function Insights() {
             <View style={s.legend}>
               {(
                 [
-                  ['tt', 'TikTok', '52%', '1.25M'],
-                  ['yt', 'Shorts', '31%', '744K'],
-                  ['ig', 'Reels', '17%', '408K'],
+                  ['tt', 'TikTok', split.total ? `${pct(split.tt)}%` : '—', formatCount(split.tt)],
+                  ['yt', 'Shorts', split.total ? `${pct(split.yt)}%` : '—', formatCount(split.yt)],
+                  ['ig', 'Reels', split.total ? `${pct(split.ig)}%` : '—', formatCount(split.ig)],
                 ] as const
               ).map(([k, name, pct, num]) => (
                 <View key={k} style={{ flex: 1, gap: 2, opacity: dim(k) }}>
@@ -380,28 +434,30 @@ export default function Insights() {
           </View>
 
           {/* Cross-post boost */}
-          <View style={[s.card, s.boost]}>
-            <LinearGradient colors={[C.primary, C.secondaryContainer] as const} style={s.boostBar} />
-            <View style={s.boostIcon}>
-              <MaterialIcons name="rocket-launch" size={22} color={C.primary} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <View style={s.legendHead}>
-                <Text style={[s.labelMd, { fontWeight: '700' }]}>3.1x Cross-Post Boost</Text>
-                <View style={s.tertiaryPill}>
-                  <Text style={[s.label, { color: C.tertiary }]}>+210%</Text>
-                </View>
+          {boostMult ? (
+            <View style={[s.card, s.boost]}>
+              <LinearGradient colors={[C.primary, C.secondaryContainer] as const} style={s.boostBar} />
+              <View style={s.boostIcon}>
+                <MaterialIcons name="rocket-launch" size={22} color={C.primary} />
               </View>
-              <Text style={[s.caption, { marginTop: 2 }]} numberOfLines={1}>
-                Auto-syndicating unlocked 1.66M extra views from 1 single master file.
-              </Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={s.legendHead}>
+                  <Text style={[s.labelMd, { fontWeight: '700' }]}>{boostMult.toFixed(1)}x Cross-Post Boost</Text>
+                  <View style={s.tertiaryPill}>
+                    <Text style={[s.label, { color: C.tertiary }]}>{`+${Math.round((boostMult - 1) * 100)}%`}</Text>
+                  </View>
+                </View>
+                <Text style={[s.caption, { marginTop: 2 }]} numberOfLines={1}>
+                  Auto-syndicating unlocked {formatCount(split.total - split.tt)} extra views beyond TikTok.
+                </Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={C.muted} />
             </View>
-            <MaterialIcons name="chevron-right" size={20} color={C.muted} />
-          </View>
+          ) : null}
 
           {/* KPI grid */}
           <View style={s.grid}>
-            {KPIS.map((k) => {
+            {KPI_DEFS.map((k) => {
               const sp = SPARKS[k.key];
               return (
                 <View key={k.key} style={[s.card, s.kpi]}>
@@ -409,13 +465,15 @@ export default function Insights() {
                     <View style={s.kpiIcon}>
                       <MaterialIcons name={k.icon} size={18} color={k.tint} />
                     </View>
-                    <View style={s.deltaPill}>
-                      <Text style={[s.label, { color: C.success }]}>{k.delta} ↑</Text>
-                    </View>
+                    {k.key === 'views' && delta !== null && delta > 0 ? (
+                      <View style={s.deltaPill}>
+                        <Text style={[s.label, { color: C.success }]}>{`+${delta.toFixed(1)}% ↑`}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   <View style={{ marginTop: 12 }}>
                     <Text style={[s.label, { color: C.muted }]}>{k.label}</Text>
-                    <Text style={s.statLg}>{k.value}</Text>
+                    {ovLoading ? <Skeleton width={70} height={28} radius={6} style={{ marginVertical: 3 }} /> : <Text style={s.statLg}>{kpiValue(k.key)}</Text>}
                   </View>
                   <Spark d={sp.d} color={sp.color} fill={sp.fill} progress={spark} />
                 </View>
@@ -428,9 +486,9 @@ export default function Insights() {
             <View style={s.rowBetween}>
               <View style={s.legendHead}>
                 <MaterialIcons name="timelapse" size={19} color={C.primary} />
-                <Text style={[s.labelMd, { marginLeft: 4 }]}>Avg. Watch Completion</Text>
+                <Text style={[s.labelMd, { marginLeft: 4 }]}>Avg. Watch Time / View</Text>
               </View>
-              <Text style={[s.labelMd, { fontWeight: '700' }]}>78.4%</Text>
+              <Text style={[s.labelMd, { fontWeight: '700' }]}>{avgWatch}</Text>
             </View>
             <View style={s.track}>
               <Animated.View style={[{ height: '100%', backgroundColor: C.cyan }, wTT]} />
@@ -440,8 +498,8 @@ export default function Insights() {
               </Animated.View>
             </View>
             <View style={s.rowBetween}>
-              <Text style={s.caption}>TikTok benchmark: 82%</Text>
-              <Text style={s.caption}>Reels benchmark: 71%</Text>
+              <Text style={s.caption}>Total watch time: {split.watch > 0 ? formatWatchTime(split.watch) : '—'}</Text>
+              <Text style={s.caption}>Posts published: {formatCount(ov?.posts_published ?? 0)}</Text>
             </View>
           </View>
 
@@ -450,7 +508,7 @@ export default function Insights() {
             <View style={s.legendHead}>
               <Text style={s.headline}>Top Performing Clips</Text>
               <View style={s.topPill}>
-                <Text style={[s.label, { color: C.primary }]}>3 Top</Text>
+                <Text style={[s.label, { color: C.primary }]}>{topClips.length} Top</Text>
               </View>
             </View>
             <Pressable style={s.legendHead}>
@@ -459,54 +517,77 @@ export default function Insights() {
             </Pressable>
           </View>
 
-          {CLIPS.map((c) => (
-            <View key={c.rank} style={[s.card, s.clip]}>
-              <View style={s.thumb}>
-                <Image source={{ uri: c.img }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-                <View style={s.thumbShade} />
-                <View style={[s.rank, c.rank === 1 ? { backgroundColor: C.primaryContainer } : { backgroundColor: C.raised }]}>
-                  <Text style={[s.label, { color: C.text, fontWeight: '700' }]}>{c.rank}</Text>
+          {postsQ.isError && !postsQ.data ? (
+            <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" />
+          ) : postsQ.isLoading ? (
+            <>
+              <Skeleton height={136} radius={16} />
+              <Skeleton height={136} radius={16} />
+            </>
+          ) : topClips.length === 0 ? (
+            <InlineMessage icon="movie" text="No posts yet — your top clips will rank here." />
+          ) : null}
+
+          {topClips.map(({ p, t: tt }, i) => {
+            const rank = i + 1;
+            const eng = tt.views > 0 ? ((tt.likes + tt.comments + tt.shares) / tt.views) * 100 : 0;
+            const v = (pl: 'tiktok' | 'youtube' | 'instagram') => {
+              const a = latestAnalytic(p, pl);
+              return a ? formatCount(a.views) : '—';
+            };
+            return (
+              <Pressable
+                key={p.id}
+                onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(p.id) } })}
+                style={[s.card, s.clip]}
+              >
+                <View style={s.thumb}>
+                  <LinearGradient colors={['rgba(148,125,255,0.35)', 'rgba(19,19,23,0.8)'] as const} style={StyleSheet.absoluteFill} />
+                  <View style={[s.rank, rank === 1 ? { backgroundColor: C.primaryContainer } : { backgroundColor: C.raised }]}>
+                    <Text style={[s.label, { color: C.text, fontWeight: '700' }]}>{rank}</Text>
+                  </View>
+                  <View style={s.play}>
+                    <MaterialIcons name="play-arrow" size={16} color={C.text} />
+                  </View>
                 </View>
-                <View style={s.play}>
-                  <MaterialIcons name="play-arrow" size={16} color={C.text} />
-                </View>
-                <Text style={s.dur}>{c.dur}</Text>
-              </View>
-              <View style={{ flex: 1, minWidth: 0, justifyContent: 'space-between', paddingVertical: 2 }}>
-                <View>
-                  <Text style={s.clipTitle} numberOfLines={2}>
-                    {c.title}
-                  </Text>
-                  <Text style={[s.caption, { marginTop: 4 }]}>{c.meta}</Text>
-                </View>
-                <View style={{ gap: 6, paddingTop: 4 }}>
-                  <View style={s.rowBetween}>
-                    <View style={s.baseline}>
-                      <Text style={s.headline}>{c.views}</Text>
-                      <Text style={[s.caption, { marginLeft: 4 }]}>total views</Text>
+                <View style={{ flex: 1, minWidth: 0, justifyContent: 'space-between', paddingVertical: 2 }}>
+                  <View>
+                    <Text style={s.clipTitle} numberOfLines={2}>
+                      {p.title || 'Untitled clip'}
+                    </Text>
+                    <Text style={[s.caption, { marginTop: 4 }]}>
+                      {p.published_at ? shortDate(p.published_at) : 'Not published'} • {(p.distributions ?? []).length || 1} channels
+                    </Text>
+                  </View>
+                  <View style={{ gap: 6, paddingTop: 4 }}>
+                    <View style={s.rowBetween}>
+                      <View style={s.baseline}>
+                        <Text style={s.headline}>{formatCount(tt.views)}</Text>
+                        <Text style={[s.caption, { marginLeft: 4 }]}>total views</Text>
+                      </View>
+                    </View>
+                    <View style={s.legendHead}>
+                      <MaterialIcons name="trending-up" size={14} color={C.success} />
+                      <Text style={[s.label, { color: C.success, marginLeft: 2 }]}>{eng.toFixed(1)}% engagement</Text>
+                    </View>
+                    <View style={s.pills}>
+                      {([['tt', v('tiktok')], ['yt', v('youtube')], ['ig', v('instagram')]] as const).map(([k, val]) => (
+                        <View key={k} style={s.miniPill}>
+                          <View style={[s.miniDot, { backgroundColor: k === 'tt' ? C.cyan : k === 'yt' ? C.youtube : C.igMid }]} />
+                          <Text style={s.caption}>{val}</Text>
+                        </View>
+                      ))}
                     </View>
                   </View>
-                  <View style={s.legendHead}>
-                    <MaterialIcons name="trending-up" size={14} color={C.success} />
-                    <Text style={[s.label, { color: C.success, marginLeft: 2 }]}>{c.retention} retention</Text>
-                  </View>
-                  <View style={s.pills}>
-                    {([['tt', c.tt], ['yt', c.yt], ['ig', c.ig]] as const).map(([k, v]) => (
-                      <View key={k} style={s.miniPill}>
-                        <View style={[s.miniDot, { backgroundColor: k === 'tt' ? C.cyan : k === 'yt' ? C.youtube : C.igMid }]} />
-                        <Text style={s.caption}>{v}</Text>
-                      </View>
-                    ))}
-                  </View>
                 </View>
-              </View>
-            </View>
-          ))}
+              </Pressable>
+            );
+          })}
 
-          <Pressable style={s.cta}>
+          <AnimatedPressable style={s.cta} onPress={() => router.push('/posts' as never)}>
             <MaterialIcons name="analytics" size={19} color={C.primary} />
             <Text style={s.labelMd}>View Full Video Breakdown</Text>
-          </Pressable>
+          </AnimatedPressable>
         </ScrollView>
       </SafeAreaView>
 
@@ -517,7 +598,9 @@ export default function Insights() {
             const on = t.label === 'Insights';
             return (
               <Pressable key={t.label} style={s.tab} onPress={() => !on && router.push(t.route as never)}>
-                <MaterialIcons name={t.icon} size={24} color={on ? C.primaryContainer : C.muted} />
+                <BounceIcon active={on}>
+                  <MaterialIcons name={t.icon} size={24} color={on ? C.primaryContainer : C.muted} />
+                </BounceIcon>
                 <Text style={[s.label, { marginTop: 2, color: on ? C.primaryContainer : C.muted }]}>{t.label}</Text>
                 {on ? <View style={s.tabDot} /> : null}
               </Pressable>
@@ -563,6 +646,7 @@ const s = StyleSheet.create({
   shareBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: C.high, alignItems: 'center', justifyContent: 'center' },
   popover: { alignSelf: 'flex-end', width: 176, borderRadius: 12, backgroundColor: C.raised, padding: 6, gap: 4, marginTop: -8 },
   popItem: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  chartMsg: { position: 'absolute', left: 0, right: 0, top: 30, zIndex: 2 },
   chipsWrap: { marginHorizontal: -16 },
   chips: { paddingHorizontal: 16, gap: 6, paddingVertical: 4 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },

@@ -15,6 +15,9 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { BottomTabInset } from '@/constants/theme';
+import { useMe, useOverview, useSocialAccounts } from '@/api/hooks';
+import { AnimatedPressable, BounceIcon, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { formatCount } from '@/lib/format';
 import { useAuthStore } from '@/store/authStore';
 
 // Kinetic Obsidian tokens (see "profile step 9"/DESIGN.md)
@@ -50,11 +53,7 @@ const TABS = [
   ['Profile', 'account-circle', '/profile'],
 ] as const;
 
-const STATS = [
-  { label: 'Syndicated', value: '48' },
-  { label: 'Total Views', value: '2.4M', accent: true },
-  { label: 'Platforms', value: '3', sync: true },
-] as const;
+const CLIP_LIMIT = 100; // plan allowance shown in the design (Pro tier); no plan endpoint exists yet.
 
 const TIERS = [
   { name: 'Free', price: '$0/mo', tag: 'Starter', desc: '5 clips/mo • 720p transcode • ClipPipeline watermark', current: false },
@@ -78,6 +77,37 @@ export default function ProfileScreen() {
   const [plansOpen, setPlansOpen] = useState(false);
   const [prefs, setPrefs] = useState({ autoSync: true, watermark: true, push: true });
 
+  const meQ = useMe();
+  const overviewQ = useOverview('30d');
+  const accountsQ = useSocialAccounts();
+  const user = meQ.data?.user;
+  const ov = overviewQ.data;
+  const accounts = accountsQ.data ?? [];
+  const connected = accounts.filter((a) => a.connected);
+  const has = (p: 'tiktok' | 'youtube' | 'instagram') => connected.some((a) => a.provider === p);
+  const connectedCount = ov?.connected_accounts ?? connected.length;
+  const name = user?.name?.trim() || (meQ.isLoading ? '' : 'Guest');
+  const initials =
+    (user?.name ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase())
+      .join('') || 'G';
+  const handleSrc = accounts.find((a) => a.handle)?.handle ?? null;
+  const handle = handleSrc ? `@${handleSrc.replace(/^@/, '')}` : null;
+  const used = ov?.posts_published ?? 0;
+  const usedPct = Math.min(100, Math.round((used / CLIP_LIMIT) * 100));
+  const statsLoading = overviewQ.isLoading;
+  const stats = [
+    { label: 'Syndicated', value: formatCount(used) },
+    { label: 'Total Views', value: formatCount(ov?.total_views ?? 0), accent: true },
+    { label: 'Platforms', value: String(connectedCount), sync: true },
+  ] as const;
+  const accountNames = connected.length
+    ? connected.map((a) => (a.provider === 'tiktok' ? 'TikTok' : a.provider === 'youtube' ? 'YouTube Shorts' : 'Instagram Reels')).join(', ')
+    : 'No accounts linked yet';
+
   // Avatar glow pulse, live-dot ping, meter fill, plan chevron rotation.
   const glow = useSharedValue(0.4);
   const ping = useSharedValue(0);
@@ -87,8 +117,11 @@ export default function ProfileScreen() {
   useEffect(() => {
     glow.value = withRepeat(withTiming(0.9, { duration: 1600, easing: Easing.inOut(Easing.ease) }), -1, true);
     ping.value = withRepeat(withTiming(1, { duration: 1400, easing: Easing.out(Easing.ease) }), -1, false);
-    meter.value = withDelay(250, withTiming(48, { duration: 900, easing: Easing.out(Easing.cubic) }));
-  }, [glow, ping, meter]);
+    }, [glow, ping]);
+
+  useEffect(() => {
+    meter.value = withDelay(250, withTiming(usedPct, { duration: 900, easing: Easing.out(Easing.cubic) }));
+  }, [usedPct, meter]);
 
   const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
   const pingStyle = useAnimatedStyle(() => ({ opacity: 0.75 * (1 - ping.value), transform: [{ scale: 1 + ping.value * 2 }] }));
@@ -156,7 +189,7 @@ export default function ProfileScreen() {
                 style={s.avatarRing}
               >
                 <View style={s.avatarInner}>
-                  <Text style={s.avatarInitials}>AR</Text>
+                  <Text style={s.avatarInitials}>{initials}</Text>
                 </View>
               </LinearGradient>
               <View style={s.liveBadge}>
@@ -168,11 +201,14 @@ export default function ProfileScreen() {
             </View>
 
             <View style={s.nameRow}>
-              <Text style={s.name}>Alex Rivers</Text>
-              <MaterialIcons name="verified" size={18} color={C.primary} />
+              {meQ.isLoading ? <Skeleton width={140} height={26} radius={6} /> : <Text style={s.name}>{name}</Text>}
+              {user ? <MaterialIcons name="verified" size={18} color={C.primary} /> : null}
             </View>
-            <Text style={s.handle}>@alexcreates</Text>
-            <Text style={s.email}>alex@createspace.io</Text>
+            {handle ? <Text style={s.handle}>{handle}</Text> : null}
+            {user?.email ? <Text style={s.email}>{user.email}</Text> : null}
+            {meQ.isError && !user ? (
+              <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" style={s.heroMsg} />
+            ) : null}
 
             <View style={s.planPill}>
               <MaterialIcons name="workspace-premium" size={14} color={C.tertiary} />
@@ -181,10 +217,14 @@ export default function ProfileScreen() {
             </View>
 
             <View style={s.statsStrip}>
-              {STATS.map((stat) => (
+              {stats.map((stat) => (
                 <View key={stat.label} style={[s.stat, 'accent' in stat && s.statAccent]}>
                   <View style={s.statValueRow}>
-                    <Text style={[s.statValue, 'accent' in stat && { color: C.primary }]}>{stat.value}</Text>
+                    {statsLoading ? (
+                      <Skeleton width={36} height={18} radius={5} />
+                    ) : (
+                      <Text style={[s.statValue, 'accent' in stat && { color: C.primary }]}>{stat.value}</Text>
+                    )}
                     {'sync' in stat ? <MaterialIcons name="sync" size={12} color={C.success} /> : null}
                   </View>
                   <Text style={s.statLabel}>{stat.label}</Text>
@@ -220,7 +260,7 @@ export default function ProfileScreen() {
                 <Text style={s.meterLabel}>Monthly Clips Syndicated</Text>
               </View>
               <Text style={s.meterCount}>
-                48 <Text style={s.meterCountMuted}>/ 100 clips</Text>
+                {used} <Text style={s.meterCountMuted}>/ {CLIP_LIMIT} clips</Text>
               </Text>
             </View>
             <View style={s.track}>
@@ -235,7 +275,7 @@ export default function ProfileScreen() {
             </View>
             <View style={s.meterFoot}>
               <Text style={s.meterFootMuted}>Resets in 16 days</Text>
-              <Text style={s.meterFootAccent}>52% remaining</Text>
+              <Text style={s.meterFootAccent}>{100 - usedPct}% remaining</Text>
             </View>
           </View>
 
@@ -255,10 +295,7 @@ export default function ProfileScreen() {
           </View>
 
           <View style={s.subActions}>
-            <Pressable
-              accessibilityRole="button"
-              style={({ pressed }) => [s.upgradeWrap, pressed && s.pressedUpgrade]}
-            >
+            <AnimatedPressable accessibilityRole="button" style={s.upgradeWrap}>
               <Animated.View style={[s.upgradeGlow, glowStyle]}>
                 <LinearGradient
                   colors={[C.violet, C.violetEnd]}
@@ -276,19 +313,15 @@ export default function ProfileScreen() {
                 <MaterialIcons name="bolt" size={18} color={C.text} />
                 <Text style={s.upgradeText}>Upgrade to Agency ($79/mo)</Text>
               </LinearGradient>
-            </Pressable>
+            </AnimatedPressable>
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={togglePlans}
-              style={({ pressed }) => [s.compareBtn, pressed && s.pressedSoft]}
-            >
+            <AnimatedPressable accessibilityRole="button" onPress={togglePlans} style={s.compareBtn}>
               <MaterialIcons name="view-carousel" size={16} color={C.muted} />
               <Text style={s.compareText}>Compare All Plans & Features</Text>
               <Animated.View style={chevronStyle}>
                 <MaterialIcons name="expand-more" size={18} color={C.muted} />
               </Animated.View>
-            </Pressable>
+            </AnimatedPressable>
           </View>
         </View>
 
@@ -359,13 +392,14 @@ export default function ProfileScreen() {
             icon="hub"
             tint={C.muted}
             title="Connected Accounts"
-            badge="3"
-            subtitle="TikTok, YouTube Shorts, Instagram Reels"
+            badge={accountsQ.isLoading ? undefined : String(connectedCount)}
+            subtitle={accountsQ.isError && !accountsQ.data ? "Couldn't load data" : accountNames}
+            onPress={() => router.push('/connect' as never)}
             right={
               <View style={s.platforms}>
-                <PlatformBadge name="tiktok" color={C.cyan} />
-                <PlatformBadge name="youtube" color={C.youtube} />
-                <PlatformBadge name="instagram" color={C.instagram} />
+                <PlatformBadge name="tiktok" color={has('tiktok') ? C.cyan : C.muted} />
+                <PlatformBadge name="youtube" color={has('youtube') ? C.youtube : C.muted} />
+                <PlatformBadge name="instagram" color={has('instagram') ? C.instagram : C.muted} />
                 <MaterialIcons name="chevron-right" size={20} color={C.muted} />
               </View>
             }
@@ -384,14 +418,10 @@ export default function ProfileScreen() {
         </Section>
 
         {/* Sign out */}
-        <Pressable
-          accessibilityRole="button"
-          onPress={signOut}
-          style={({ pressed }) => [s.logout, pressed && s.pressedLogout]}
-        >
+        <AnimatedPressable accessibilityRole="button" onPress={signOut} style={s.logout}>
           <MaterialIcons name="logout" size={20} color={C.danger} />
           <Text style={s.logoutText}>Log Out of Pipeline</Text>
-        </Pressable>
+        </AnimatedPressable>
 
         <View style={s.footer}>
           <Text style={s.footerText}>ClipPipeline Mobile v3.8.4 (Build 882)</Text>
@@ -414,7 +444,9 @@ export default function ProfileScreen() {
               }}
               style={s.tab}
             >
-              <MaterialIcons name={icon} size={24} color={active ? C.violet : C.muted} />
+              <BounceIcon active={active}>
+                <MaterialIcons name={icon} size={24} color={active ? C.violet : C.muted} />
+              </BounceIcon>
               <Text style={[s.tabLabel, active && s.tabLabelActive]}>{label}</Text>
               {active ? <View style={s.tabDot} /> : null}
             </Pressable>
@@ -442,6 +474,7 @@ function Row({
   tint = C.primary,
   right,
   chevron,
+  onPress,
 }: {
   icon: IconName;
   title: string;
@@ -450,10 +483,12 @@ function Row({
   tint?: string;
   right?: ReactNode;
   chevron?: boolean;
+  onPress?: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
+      onPress={onPress}
       style={({ pressed }) => [s.row, pressed && s.rowPressed]}
     >
       <View style={s.rowLeft}>
@@ -516,6 +551,7 @@ const s = StyleSheet.create({
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingTop: 8, gap: 20 },
   pressedSoft: { opacity: 0.7 },
+  heroMsg: { marginTop: 10, alignSelf: 'stretch' },
 
   header: {
     height: 56,

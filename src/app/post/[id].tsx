@@ -1,10 +1,14 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { usePost, useSocialAccounts } from '@/api/hooks';
+import type { Platform } from '@/api/types';
+import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { buildChart, captionBody, hashtagsOf, latestAnalytic, timeAgo, totalsFor } from '@/components/post-utils';
+import { formatCount, formatDate, formatWatchTime } from '@/lib/format';
 import Animated, { Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
 const C = {
@@ -31,34 +35,24 @@ const C = {
   igEnd: '#8134AF',
 } as const;
 
-const PREVIEW =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuCFQCYwzRIf8JH_BvZ0vSQb4U9y1mejyWt50gpR1mYwmN4GzZY0NQ_yCqsLdibQQUVJFO_hoiR5YoJfGg4irO_r_Pp-vicWAZZjH94jiguPNgjc4eH80xZ1BBrDDqkJr2JRS3jiXK3qeOROoBuVfpLEiCWU4ZOepU3FJLKmPlUDgwgCqVLCecSgUuRtaLAONWp4En3DtPuJbeqAeyR3kOF8OZ0Js1ldpV1DCjuOaCqKiymTyMw86cWfWQ';
-
 const TABS = ['Aggregated', 'TikTok', 'YouTube', 'Reels'] as const;
 type Tab = (typeof TABS)[number];
 
-const hero = [
-  ['Likes', '98.4K'],
-  ['Comments', '3.8K'],
-  ['Shares', '14.2K'],
-  ['Watch Time', '412h'],
-] as const;
+const PLAT_META: Record<Platform, { name: string; dot: string }> = {
+  tiktok: { name: 'TikTok (Master Original)', dot: C.cyan },
+  youtube: { name: 'YouTube Shorts', dot: C.youtube },
+  instagram: { name: 'Instagram Reels', dot: C.igMid },
+};
+const TAB_PLATFORM: Record<string, Platform | undefined> = { TikTok: 'tiktok', YouTube: 'youtube', Reels: 'instagram' };
 
-const platforms = [
-  { key: 'TikTok', name: 'TikTok (Master Original)', dot: C.cyan, note: 'Avg Watch: 41s', noteColor: C.muted, stats: ['1.2M', '88K', '4.1K', '18.3K'], dim: false },
-  { key: 'YouTube', name: 'YouTube Shorts', dot: C.youtube, note: '38s (90% Ret.)', noteColor: C.success, stats: ['780K', '62K', '2.4K', '9.1K'], dim: false },
-  { key: 'Reels', name: 'Instagram Reels', dot: C.igMid, note: '', noteColor: C.danger, stats: ['--', '--', '--', '--'], dim: true },
-] as const;
-
-// Sparkline: exact path data from the design's 320x32 viewBox.
-const SPARK_D = 'M0 28 C 30 26, 60 20, 90 22 C 120 24, 150 12, 180 14 C 210 16, 240 6, 270 4 C 290 3, 310 1, 320 2';
-const SPARK_AREA_D = `${SPARK_D} L 320 32 L 0 32 Z`;
-const SPARK_LEN = 340;
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 export default function PostDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  void id; // Sample content from the design is shown; id reserved for usePost wiring.
+  const postQ = usePost(Number(id));
+  const accountsQ = useSocialAccounts();
+  const post = postQ.data;
+  const tiktokHandle = accountsQ.data?.find((a) => a.provider === 'tiktok')?.handle;
 
   const [tab, setTab] = useState<Tab>('Aggregated');
   const [copied, setCopied] = useState(false);
@@ -72,6 +66,7 @@ export default function PostDetails() {
   const glow = useSharedValue(0.4);
   const bars = useSharedValue(0);
   const velocity = useSharedValue(0);
+  const sparkLenSv = useSharedValue(340);
 
   useEffect(() => {
     pulse.value = withRepeat(withTiming(0.3, { duration: 1000, easing: Easing.inOut(Easing.ease) }), -1, true);
@@ -89,13 +84,47 @@ export default function PostDetails() {
     }
   }, [retry, resync, spinBtn]);
 
-  const sparkLineProps = useAnimatedProps(() => ({ strokeDashoffset: SPARK_LEN * (1 - velocity.value) }));
+  const sparkLineProps = useAnimatedProps(() => ({ strokeDashoffset: sparkLenSv.value * (1 - velocity.value) }));
   const sparkAreaProps = useAnimatedProps(() => ({ opacity: Math.min(1, Math.max(0, (velocity.value - 0.5) * 2)) }));
   const dotStyle = useAnimatedStyle(() => ({ opacity: 0.4 + pulse.value * 0.6 }));
   const pingStyle = useAnimatedStyle(() => ({ opacity: 0.75 * (1 - ping.value), transform: [{ scale: 1 + ping.value * 2 }] }));
   const spinStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
   const spinBtnStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spinBtn.value * 360}deg` }] }));
   const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
+
+  const totals = useMemo(() => (post ? totalsFor(post) : { views: 0, likes: 0, comments: 0, shares: 0, watch: 0 }), [post]);
+  const heroStats: [string, string][] = [
+    ['Likes', formatCount(totals.likes)],
+    ['Comments', formatCount(totals.comments)],
+    ['Shares', formatCount(totals.shares)],
+    ['Watch Time', formatWatchTime(totals.watch)],
+  ];
+  const series = useMemo(() => {
+    const rows = [...(post?.analytics ?? [])].sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
+    const per: Record<string, number> = {};
+    const out: { v: number; t: number }[] = [];
+    rows.forEach((r) => {
+      per[r.platform] = r.views ?? 0;
+      out.push({ v: Object.values(per).reduce((n, x) => n + x, 0), t: new Date(r.recorded_at).getTime() });
+    });
+    return out;
+  }, [post]);
+  const spark = useMemo(() => buildChart(series.map((x) => x.v), { w: 320, top: 3, bottom: 29 }), [series]);
+  const sparkD = spark?.d ?? 'M0,29 L320,29';
+  const sparkAreaD = `${sparkD} L 320 32 L 0 32 Z`;
+  const velocity_ = useMemo(() => {
+    if (series.length < 2) return null;
+    const hrs = (series[series.length - 1].t - series[0].t) / 3600000;
+    return hrs > 0 ? (series[series.length - 1].v - series[0].v) / hrs : null;
+  }, [series]);
+  const sparkLen = spark?.len ?? 340;
+  useEffect(() => {
+    sparkLenSv.value = sparkLen;
+  }, [sparkLen, sparkLenSv]);
+
+  const targets = (post?.distributions ?? []).filter((d) => d.platform !== 'tiktok');
+  const tags = hashtagsOf(post?.caption);
+  const tiktokViews = post ? latestAnalytic(post, 'tiktok')?.views ?? 0 : 0;
 
   const copy = () => {
     setCopied(true);
@@ -115,9 +144,6 @@ export default function PostDetails() {
     }, 1000);
   };
 
-  const showTikTok = tab === 'Aggregated' || tab === 'TikTok';
-  const showYouTube = tab === 'Aggregated' || tab === 'YouTube';
-  const showReels = tab === 'Aggregated' || tab === 'Reels';
 
   return (
     <SafeAreaView style={s.safe}>
@@ -140,46 +166,59 @@ export default function PostDetails() {
       </View>
 
       <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false}>
+        {!post ? (
+          postQ.isLoading ? (
+            <View style={{ gap: 12 }}>
+              <Skeleton height={320} radius={12} />
+              <Skeleton height={20} width="70%" />
+              <Skeleton height={90} radius={12} />
+              <Skeleton height={90} radius={12} />
+            </View>
+          ) : (
+            <InlineMessage
+              tone="danger"
+              icon="cloud-off"
+              text={postQ.isError ? "Couldn't load data" : 'Post not found'}
+            />
+          )
+        ) : (
+        <>
         {/* Video card */}
         <View style={s.glow} pointerEvents="none" />
         <View style={s.videoCard}>
           <View style={s.stage}>
-            <Image source={{ uri: PREVIEW }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            <LinearGradient colors={['#0E0E1299', '#0E0E1200', '#0E0E12']} style={StyleSheet.absoluteFill} />
+            <LinearGradient colors={['#947DFF55', '#0E0E1200', '#0E0E12']} style={StyleSheet.absoluteFill} />
             <View style={s.badges}>
               <View style={s.badge}>
                 <Animated.View style={[s.badgeDot, dotStyle]} />
-                <Text style={s.badgeText}>@alexcreates</Text>
+                <Text style={s.badgeText}>{tiktokHandle ? `@${tiktokHandle.replace(/^@/, '')}` : 'TikTok'}</Text>
               </View>
               <View style={s.badge}>
                 <MaterialIcons name="schedule" size={14} color={C.muted} />
-                <Text style={s.badgeCaption}>2d ago</Text>
+                <Text style={s.badgeCaption}>{timeAgo(post.published_at)}</Text>
               </View>
             </View>
-            <Pressable accessibilityLabel="Play master video preview" style={({ pressed }) => [s.play, pressed && s.press]}>
+            <AnimatedPressable
+              accessibilityLabel="Play master video preview"
+              style={s.play}
+              onPress={() => {
+                if (post.video_url) Linking.openURL(post.video_url).catch(() => undefined);
+              }}
+            >
               <View style={s.playTint} />
               <MaterialIcons name="play-arrow" size={32} color={C.primary} />
-            </Pressable>
-            <View style={s.stageBottom}>
-              <Text style={s.time}>0:42</Text>
-              <View style={s.res}>
-                <MaterialIcons name="hd" size={13} color={C.cyan} />
-                <Text style={s.resText}>1080p • 60fps</Text>
-              </View>
-            </View>
+            </AnimatedPressable>
           </View>
 
           <View style={s.summary}>
             <View style={s.titleRow}>
-              <Text style={s.title} numberOfLines={2}>5 productivity tools that felt illegal to know in 2024</Text>
+              <Text style={s.title} numberOfLines={2}>{post.title || 'Untitled clip'}</Text>
               <Pressable accessibilityLabel="Copy caption" style={({ pressed }) => [s.copyBtn, pressed && s.press]} onPress={copy}>
                 <MaterialIcons name={copied ? 'done' : 'content-copy'} size={18} color={copied ? C.success : C.muted} />
               </Pressable>
             </View>
-            <Text style={s.caption}>
-              Stop doing manual data entry in your workflows and let sync pipelines do the heavy lifting. Full breakdown of tools linked in bio! ⚡
-            </Text>
-            <Text style={s.tags}>#tech #ai #automation #productivity</Text>
+            {captionBody(post.caption) ? <Text style={s.caption}>{captionBody(post.caption)}</Text> : null}
+            {tags.length ? <Text style={s.tags}>{tags.join(' ')}</Text> : null}
 
             <View style={s.source}>
               <View style={s.sourceLeft}>
@@ -188,11 +227,11 @@ export default function PostDetails() {
                 </View>
                 <View>
                   <Text style={s.sourceTitle}>Master Source: TikTok</Text>
-                  <Text style={s.sourceSub}>Clean sync • No watermark</Text>
+                  <Text style={s.sourceSub}>{post.published_at ? `Published ${formatDate(post.published_at)}` : 'Not published yet'}</Text>
                 </View>
               </View>
               <View style={s.sourceRight}>
-                <Text style={s.sourceNum}>142.8K</Text>
+                <Text style={s.sourceNum}>{formatCount(tiktokViews)}</Text>
                 <Text style={s.sourceSub}>source views</Text>
               </View>
             </View>
@@ -205,89 +244,97 @@ export default function PostDetails() {
             <View style={s.secTitleRow}>
               <View style={[s.secBar, { backgroundColor: C.primary }]} />
               <Text style={s.secTitle}>Distribution</Text>
-              <Text style={s.secNote}>• 2 Target Channels</Text>
+              <Text style={s.secNote}>• {targets.length} Target {targets.length === 1 ? 'Channel' : 'Channels'}</Text>
             </View>
-            <Pressable style={s.manage}>
+            <Pressable style={s.manage} onPress={() => router.push('/connect' as never)}>
               <MaterialIcons name="sync-alt" size={16} color={C.primary} />
               <Text style={s.manageText}>Manage Sync</Text>
             </Pressable>
           </View>
 
-          {/* YouTube */}
-          <View style={s.chCard}>
-            <View style={s.chRow}>
-              <View style={s.chLeft}>
-                <View style={[s.chIcon, { backgroundColor: C.raised }]}>
-                  <FontAwesome5 name="youtube" size={18} color={C.youtube} />
-                </View>
-                <View>
-                  <View style={s.chNameRow}>
-                    <Text style={s.chName}>YouTube Shorts</Text>
-                    <MaterialIcons name="check-circle" size={14} color={C.success} />
-                  </View>
-                  <Text style={s.chSub}>Oct 24, 14:32 • ID: #yt-892f1a</Text>
-                </View>
-              </View>
-              <View style={[s.pill, { backgroundColor: '#28C76F26' }]}>
-                <View style={[s.pillDot, { backgroundColor: C.success }]} />
-                <Text style={[s.pillText, { color: C.success }]}>Published</Text>
-              </View>
-            </View>
-            <View style={s.chFoot}>
-              <Text style={s.chSub}>Transcode: 1080x1920 • 60fps</Text>
-              <Pressable style={({ pressed }) => [s.linkBtn, pressed && s.press]}>
-                <Text style={s.linkText}>Shorts Link</Text>
-                <MaterialIcons name="north-east" size={15} color={C.muted} />
-              </Pressable>
-            </View>
-          </View>
+          {targets.length === 0 ? (
+            <InlineMessage icon="call-split" text="No target channels yet for this post." />
+          ) : null}
 
-          {/* Instagram */}
-          <View style={s.chCard}>
-            <View style={s.chRow}>
-              <View style={s.chLeft}>
-                <LinearGradient colors={[C.igStart, C.igMid, C.igEnd]} start={{ x: 0, y: 1 }} end={{ x: 1, y: 0 }} style={s.chIcon}>
-                  <FontAwesome5 name="instagram" size={18} color={C.text} />
-                </LinearGradient>
-                <View>
-                  <View style={s.chNameRow}>
-                    <Text style={s.chName}>Instagram Reels</Text>
-                    <MaterialIcons name="error-outline" size={14} color={C.danger} />
+          {targets.map((d) => {
+            const yt = d.platform === 'youtube';
+            const failed = d.status === 'failed';
+            const done = d.status === 'published';
+            const tone = done ? C.success : failed ? C.danger : C.warning;
+            const label = done ? 'Published' : failed ? 'Failed' : d.status === 'processing' ? 'Processing' : 'Queued';
+            const sub = failed
+              ? 'Syndication attempt failed'
+              : d.external_id
+                ? `ID: #${d.external_id}`
+                : done
+                  ? 'Live'
+                  : 'Waiting for pipeline';
+            return (
+              <View style={s.chCard} key={d.id}>
+                <View style={s.chRow}>
+                  <View style={s.chLeft}>
+                    {yt ? (
+                      <View style={[s.chIcon, { backgroundColor: C.raised }]}>
+                        <FontAwesome5 name="youtube" size={18} color={C.youtube} />
+                      </View>
+                    ) : (
+                      <LinearGradient colors={[C.igStart, C.igMid, C.igEnd]} start={{ x: 0, y: 1 }} end={{ x: 1, y: 0 }} style={s.chIcon}>
+                        <FontAwesome5 name="instagram" size={18} color={C.text} />
+                      </LinearGradient>
+                    )}
+                    <View style={s.flexShrink}>
+                      <View style={s.chNameRow}>
+                        <Text style={s.chName}>{yt ? 'YouTube Shorts' : 'Instagram Reels'}</Text>
+                        <MaterialIcons name={done ? 'check-circle' : failed ? 'error-outline' : 'schedule'} size={14} color={tone} />
+                      </View>
+                      <Text style={s.chSub} numberOfLines={1}>{sub}</Text>
+                    </View>
                   </View>
-                  <Text style={s.chSub}>Scheduled attempt failed</Text>
+                  <View style={[s.pill, { backgroundColor: `${tone}26` }]}>
+                    <Animated.View style={[s.pillDot, { backgroundColor: tone }, failed ? dotStyle : undefined]} />
+                    <Text style={[s.pillText, { color: tone }]}>{label}</Text>
+                  </View>
                 </View>
+                {done && yt && d.external_id ? (
+                  <View style={s.chFoot}>
+                    <Text style={s.chSub}>Live on YouTube Shorts</Text>
+                    <Pressable
+                      style={({ pressed }) => [s.linkBtn, pressed && s.press]}
+                      onPress={() => Linking.openURL(`https://www.youtube.com/shorts/${d.external_id}`).catch(() => undefined)}
+                    >
+                      <Text style={s.linkText}>Shorts Link</Text>
+                      <MaterialIcons name="north-east" size={15} color={C.muted} />
+                    </Pressable>
+                  </View>
+                ) : null}
+                {failed ? (
+                  <View style={s.diag}>
+                    <View style={s.diagRow}>
+                      <MaterialIcons name="warning-amber" size={18} color={C.danger} style={{ marginTop: 2 }} />
+                      <Text style={s.diagText}>{d.error_message || 'Syndication failed. Check the connected account and retry.'}</Text>
+                    </View>
+                    <View style={s.diagBtns}>
+                      <AnimatedPressable
+                        style={[s.retry, retry === 'queued' && { backgroundColor: C.warning }]}
+                        onPress={doRetry}
+                      >
+                        <Animated.View style={retry === 'busy' ? spinBtnStyle : undefined}>
+                          <MaterialIcons name={retry === 'idle' ? 'replay' : retry === 'busy' ? 'refresh' : 'check'} size={16} color={retry === 'queued' ? C.bg : C.text} />
+                        </Animated.View>
+                        <Text style={[s.retryText, retry === 'queued' && { color: C.bg }]}>
+                          {retry === 'idle' ? 'Retry Syndication' : retry === 'busy' ? 'Re-dispatching...' : `Queued for ${yt ? 'Shorts' : 'Reels'}`}
+                        </Text>
+                      </AnimatedPressable>
+                      <AnimatedPressable style={s.reauth} onPress={() => router.push('/connect' as never)}>
+                        <MaterialIcons name="vpn-key" size={16} color={C.text} />
+                        <Text style={s.retryText}>Re-authorize</Text>
+                      </AnimatedPressable>
+                    </View>
+                  </View>
+                ) : null}
               </View>
-              <View style={[s.pill, { backgroundColor: '#EA545526' }]}>
-                <Animated.View style={[s.pillDot, { backgroundColor: C.danger }, dotStyle]} />
-                <Text style={[s.pillText, { color: C.danger }]}>Failed</Text>
-              </View>
-            </View>
-            <View style={s.diag}>
-              <View style={s.diagRow}>
-                <MaterialIcons name="warning-amber" size={18} color={C.danger} style={{ marginTop: 2 }} />
-                <Text style={s.diagText}>
-                  Token expired on Instagram Reels (Meta Graph API Error 190: OAuthException). Account permissions need refreshing.
-                </Text>
-              </View>
-              <View style={s.diagBtns}>
-                <Pressable
-                  style={({ pressed }) => [s.retry, retry === 'queued' && { backgroundColor: C.warning }, pressed && s.press]}
-                  onPress={doRetry}
-                >
-                  <Animated.View style={retry === 'busy' ? spinBtnStyle : undefined}>
-                    <MaterialIcons name={retry === 'idle' ? 'replay' : retry === 'busy' ? 'refresh' : 'check'} size={16} color={retry === 'queued' ? C.bg : C.text} />
-                  </Animated.View>
-                  <Text style={[s.retryText, retry === 'queued' && { color: C.bg }]}>
-                    {retry === 'idle' ? 'Retry Syndication' : retry === 'busy' ? 'Re-dispatching...' : 'Queued for Reels'}
-                  </Text>
-                </Pressable>
-                <Pressable style={({ pressed }) => [s.reauth, pressed && s.press]}>
-                  <MaterialIcons name="vpn-key" size={16} color={C.text} />
-                  <Text style={s.retryText}>Re-authorize</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
+            );
+          })}
         </View>
 
         {/* Analytics */}
@@ -314,22 +361,22 @@ export default function PostDetails() {
             ))}
           </View>
 
+          {(post.analytics ?? []).length === 0 ? (
+            <InlineMessage icon="query-stats" text="No analytics yet — stats appear after the first sync." />
+          ) : null}
+
           {tab === 'Aggregated' && (
             <View style={s.heroCard}>
               <View style={s.heroGlow} />
               <View style={s.heroHead}>
                 <Text style={s.heroLabel}>Combined Total Reach</Text>
-                <View style={s.delta}>
-                  <MaterialIcons name="trending-up" size={13} color={C.success} />
-                  <Text style={s.deltaText}>+34.2% vs avg</Text>
-                </View>
               </View>
               <View style={s.heroNumRow}>
-                <Text style={s.heroNum}>1.2M</Text>
+                <Text style={s.heroNum}>{formatCount(totals.views)}</Text>
                 <Text style={s.heroUnit}>Gross Views</Text>
               </View>
               <View style={s.cluster}>
-                {hero.map(([label, val]) => (
+                {heroStats.map(([label, val]) => (
                   <View key={label} style={s.clusterCell}>
                     <Text style={s.cap}>{label}</Text>
                     <Text style={s.clusterVal}>{val}</Text>
@@ -339,18 +386,18 @@ export default function PostDetails() {
               <View style={s.velocity}>
                 <View style={s.velHead}>
                   <Text style={s.cap}>Syndication Velocity</Text>
-                  <Text style={s.cap}>1.8k views/hr</Text>
+                  <Text style={s.cap}>{velocity_ !== null ? `${formatCount(Math.max(0, velocity_))} views/hr` : '—'}</Text>
                 </View>
                 <View style={s.spark}>
                   <Svg width="100%" height={32} viewBox="0 0 320 32" preserveAspectRatio="none">
-                    <AnimatedPath d={SPARK_AREA_D} fill={C.primary} fillOpacity={0.08} animatedProps={sparkAreaProps} />
+                    <AnimatedPath d={sparkAreaD} fill={C.primary} fillOpacity={0.08} animatedProps={sparkAreaProps} />
                     <AnimatedPath
-                      d={SPARK_D}
+                      d={sparkD}
                       fill="none"
                       stroke={C.primary}
                       strokeWidth={2}
                       strokeLinecap="round"
-                      strokeDasharray={SPARK_LEN}
+                      strokeDasharray={sparkLen}
                       animatedProps={sparkLineProps}
                     />
                   </Svg>
@@ -360,34 +407,41 @@ export default function PostDetails() {
           )}
 
           <View style={s.platList}>
-            {platforms
-              .filter((p) => (p.key === 'TikTok' ? showTikTok : p.key === 'YouTube' ? showYouTube : showReels))
-              .map((p) => (
-                <View key={p.key} style={[s.platCard, p.dim && { opacity: 0.85 }]}>
-                  <View style={s.platHead}>
-                    <View style={s.platName}>
-                      <View style={[s.platDot, { backgroundColor: p.dot }]} />
-                      <Text style={s.chName}>{p.name}</Text>
+            {(['tiktok', 'youtube', 'instagram'] as Platform[])
+              .filter((pl) => tab === 'Aggregated' || TAB_PLATFORM[tab] === pl)
+              .map((pl) => {
+                const a = latestAnalytic(post, pl);
+                const dim = !a;
+                const vals = a
+                  ? [formatCount(a.views), formatCount(a.likes), formatCount(a.comments), formatCount(a.shares)]
+                  : ['--', '--', '--', '--'];
+                return (
+                  <View key={pl} style={[s.platCard, dim && { opacity: 0.85 }]}>
+                    <View style={s.platHead}>
+                      <View style={s.platName}>
+                        <View style={[s.platDot, { backgroundColor: PLAT_META[pl].dot }]} />
+                        <Text style={s.chName}>{PLAT_META[pl].name}</Text>
+                      </View>
+                      {a ? (
+                        <Text style={[s.platNote, { color: C.muted }]}>Watch: {formatWatchTime(a.watch_time)}</Text>
+                      ) : (
+                        <View style={s.syncBad}>
+                          <MaterialIcons name="sync-problem" size={13} color={C.danger} />
+                          <Text style={s.syncBadText}>No data yet</Text>
+                        </View>
+                      )}
                     </View>
-                    {p.key === 'Reels' ? (
-                      <View style={s.syncBad}>
-                        <MaterialIcons name="sync-problem" size={13} color={C.danger} />
-                        <Text style={s.syncBadText}>Sync Incomplete</Text>
-                      </View>
-                    ) : (
-                      <Text style={[s.platNote, { color: p.noteColor }]}>{p.note}</Text>
-                    )}
+                    <View style={s.statGrid}>
+                      {['Views', 'Likes', 'Comments', 'Shares'].map((label, i) => (
+                        <View key={label} style={s.statCell}>
+                          <Text style={s.cap}>{label}</Text>
+                          <Text style={[s.statVal, dim && { color: C.muted }]}>{vals[i]}</Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
-                  <View style={s.statGrid}>
-                    {['Views', 'Likes', 'Comments', 'Shares'].map((label, i) => (
-                      <View key={label} style={s.statCell}>
-                        <Text style={s.cap}>{label}</Text>
-                        <Text style={[s.statVal, p.dim && { color: C.muted }]}>{p.stats[i]}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ))}
+                );
+              })}
           </View>
         </View>
 
@@ -397,27 +451,29 @@ export default function PostDetails() {
             <Animated.View style={spinStyle}>
               <MaterialIcons name="autorenew" size={15} color={C.primary} />
             </Animated.View>
-            <Text style={s.cap}>Last synced: Just now</Text>
+            <Text style={s.cap}>Last synced: {postQ.dataUpdatedAt ? timeAgo(new Date(postQ.dataUpdatedAt).toISOString()) : '—'}</Text>
           </View>
-          <Text style={s.cap}>Auto-refreshes every 15m</Text>
+          <Text style={s.cap}>Auto-refreshes every 15s</Text>
         </View>
+        </>
+        )}
       </ScrollView>
 
       {/* Bottom dock */}
       <View style={s.dock}>
-        <Pressable style={({ pressed }) => [s.editBtn, pressed && s.press]}>
+        <AnimatedPressable style={s.editBtn}>
           <MaterialIcons name="edit-note" size={18} color={C.text} />
           <Text style={s.dockText}>Edit Caption</Text>
-        </Pressable>
+        </AnimatedPressable>
         <View style={s.resyncWrap}>
           <Animated.View style={[s.resyncGlow, glowStyle]} />
-          <Pressable style={({ pressed }) => [s.resync, pressed && s.pressCta]} onPress={doResync}>
+          <AnimatedPressable style={s.resync} onPress={doResync}>
             <LinearGradient colors={[C.primary, C.primaryContainer]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
             <Animated.View style={resync === 'busy' ? spinBtnStyle : undefined}>
               <MaterialIcons name={resync === 'done' ? 'done-all' : 'sync'} size={19} color={C.onPrimaryFixed} />
             </Animated.View>
             <Text style={s.resyncText}>{resync === 'done' ? 'Pipelines Synced!' : 'Re-sync All Channels'}</Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
       </View>
     </SafeAreaView>
@@ -426,6 +482,7 @@ export default function PostDetails() {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
+  flexShrink: { flexShrink: 1 },
   page: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 112 },
   press: { opacity: 0.8, transform: [{ scale: 0.95 }] },
   pressCta: { opacity: 0.92, transform: [{ scale: 0.98 }] },

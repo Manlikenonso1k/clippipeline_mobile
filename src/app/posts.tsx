@@ -1,5 +1,4 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -7,6 +6,12 @@ import { useEffect, useState, type ComponentProps, type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { usePosts } from '@/api/hooks';
+import type { Post as ApiPost, Platform } from '@/api/types';
+import { AnimatedPressable, BounceIcon, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { captionBody, hashtagsOf, latestAnalytic, postStatus, timeAgo } from '@/components/post-utils';
+import { formatCount } from '@/lib/format';
 
 // Kinetic Obsidian tokens (see "post page step 6/DESIGN.md")
 const C = {
@@ -40,6 +45,7 @@ type Cell =
   | { kind: 'views'; value: string }
   | { kind: 'progress'; value: string }
   | { kind: 'queued' }
+  | { kind: 'none' }
   | { kind: 'failed' };
 
 interface Post {
@@ -49,75 +55,41 @@ interface Post {
   title: string;
   body: string;
   tags: string[];
-  duration: string;
-  thumb: string;
   shorts: Cell;
   reels: Cell;
   retryMessage?: string;
 }
 
-// Sample content taken verbatim from the design.
-const POSTS: Post[] = [
-  {
-    id: 1,
-    status: 'published',
-    meta: '2d ago • Master TikTok',
-    title: '5 productivity tools that felt illegal to know in 2024',
-    body: 'Stop doing manual data entry in your workflows and let sync modules run on autopilot...',
-    tags: ['#tech', '#ai', '#automation'],
-    duration: '0:42',
-    thumb:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCDl3dN_dn-MYjEIovEbuHCEZqAmvfeFcJLMRsUtLWpzSuiZyHV1n6PvOlsL3SRUcdPJEpOCi4Xx36uzLgQAg-votxPBJZ_YcBaOoFCQ1s4AlrWHDogFTU27KDEqtG4T9NSsDcVNeLqb4Vqt9LmjP4qNRBUQ9QRqiLFyg9C3x3_MZ-38czZWpHVvrb0jMmYiDQTC68o0tPWwij1tUSulWERDh9FcC0f7vY-N1HbHtDwMBiAW5vKtBeYUw',
-    shorts: { kind: 'views', value: '780K' },
-    reels: { kind: 'views', value: '420K' },
-  },
-  {
-    id: 2,
-    status: 'processing',
-    meta: '18m ago • Master TikTok',
-    title: 'How I automated my entire content stack with AI',
-    body: 'Full step-by-step breakdown of webhooks and API routing from vertical raw footage to distribution...',
-    tags: ['#creator', '#stack'],
-    duration: '0:58',
-    thumb:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuAGrg0BZ4gOnz0HDXlkFtEP2Gv6uTDqd9faGWdj9ArRI4ycjTiQSjjoStRuYZ5oJgWkyFIFwFQYqKWXgKQaQZf48uOu9UV4KbepR9QkcG3tFR_mu_bKi7kbr19PpYXppBbPQrjR4LXRVkIaW9CPykvxwQ6JpukxCjoeng-M0UU6Z7EIBkcaueWdoDreIuPGSnv7KzPWiRIB8GsEBqJC9_lnrVLboiTjvUWj5HNc0MzhFA9znlaqHwO4vw',
-    shorts: { kind: 'progress', value: '92%' },
-    reels: { kind: 'queued' },
-  },
-  {
-    id: 3,
-    status: 'failed',
-    meta: 'Yesterday • Master TikTok',
-    title: 'The dark truth behind creator burnout',
-    body: 'Why taking 2 weeks off ruined my channel engagement algorithm and how I recovered it...',
-    tags: ['#mindset', '#growth'],
-    duration: '0:31',
-    thumb:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuB83IVck0o8KZHMGufX42X2eYm_pDSwfO9xl2HbRbMdQvpDjuof6O8xLHzKBaQMvcVxcwmOoKJSKc0WPiJV_1NzKqmfVJI2w3QVDfVzm9jDgtfK5GQDzmRiv2XWvyIlW1xwx6F9pPL3iT8MMsdAMds_iEixbeU35g7FFdy1jRiDxeONrVPnijzJ6d8t8S8KSZR1xnExvqHsKeNpHlDyn0CP3eHgkaClYMTa7-qu2YLFpFAFsKGso0mYNQ',
-    shorts: { kind: 'views', value: '310K' },
-    reels: { kind: 'failed' },
-    retryMessage: 'Token expired on Instagram Reels',
-  },
-  {
-    id: 4,
-    status: 'published',
-    meta: '3d ago • Master TikTok',
-    title: 'Top 3 microphones under $100 for TikTok creators',
-    body: "Don't buy expensive audio gear before testing these three USB options with built-in limiters...",
-    tags: ['#gear', '#audio', '#setup'],
-    duration: '0:45',
-    thumb:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuBfIcbe3RbKbAHmAfbZhor_1XFIqGe9gNWdmdvQl3Z5UKWv7zrhQySPdR-7akOdb_DXIB07AM8tJu2K2s5BbgMVTvdAtVwrZ-8czmPxYRWk80rkmb0JnXlefILoHyaSX7nBJj6foVRhKACGjmuvZ03ybvptvFdcFmaTqv3i-dq61UEZDXZr4LdF0zoAbbyAnoJswn2LZgLcctgM8FUGHSPA5aWBrEi7-_qs251vn2pIWLPQLgPhME3o7w',
-    shorts: { kind: 'views', value: '140K' },
-    reels: { kind: 'views', value: '95K' },
-  },
-];
+function cellFor(p: ApiPost, platform: Platform): Cell {
+  const d = (p.distributions ?? []).find((x) => x.platform === platform);
+  if (!d) return { kind: 'none' };
+  if (d.status === 'failed') return { kind: 'failed' };
+  if (d.status === 'pending') return { kind: 'queued' };
+  if (d.status === 'processing') return { kind: 'progress', value: 'Syncing' };
+  const a = latestAnalytic(p, platform);
+  return { kind: 'views', value: a ? formatCount(a.views) : 'Live' };
+}
 
-const FILTERS: { key: 'all' | Status; label: string; count: number }[] = [
-  { key: 'all', label: 'All', count: 48 },
-  { key: 'published', label: 'Published', count: 41 },
-  { key: 'processing', label: 'Processing', count: 4 },
-  { key: 'failed', label: 'Failed', count: 3 },
+function toCard(p: ApiPost): Post {
+  const failed = (p.distributions ?? []).find((x) => x.status === 'failed');
+  return {
+    id: p.id,
+    status: postStatus(p),
+    meta: `${timeAgo(p.published_at)} • Master TikTok`,
+    title: p.title || 'Untitled clip',
+    body: captionBody(p.caption),
+    tags: hashtagsOf(p.caption).slice(0, 4),
+    shorts: cellFor(p, 'youtube'),
+    reels: cellFor(p, 'instagram'),
+    retryMessage: failed ? failed.error_message || 'Syndication failed' : undefined,
+  };
+}
+
+const FILTERS: { key: 'all' | Status; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'published', label: 'Published' },
+  { key: 'processing', label: 'Processing' },
+  { key: 'failed', label: 'Failed' },
 ];
 
 const TABS = [
@@ -131,7 +103,16 @@ const TABS = [
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<'all' | Status>('all');
-  const visible = filter === 'all' ? POSTS : POSTS.filter((p) => p.status === filter);
+  const listQ = usePosts(filter);
+  const allQ = usePosts('all');
+  const visible = (listQ.data ?? []).map(toCard);
+  const allCards = (allQ.data ?? []).map((p) => postStatus(p));
+  const counts: Record<'all' | Status, number> = {
+    all: allCards.length,
+    published: allCards.filter((x) => x === 'published').length,
+    processing: allCards.filter((x) => x === 'processing').length,
+    failed: allCards.filter((x) => x === 'failed').length,
+  };
 
   return (
     <View style={s.root}>
@@ -161,7 +142,7 @@ export default function PostsScreen() {
             <View style={s.subTitleRow}>
               <Text style={s.subTitle}>All Activity</Text>
               <View style={s.countPill}>
-                <Text style={s.countPillText}>48 clips</Text>
+                <Text style={s.countPillText}>{counts.all} {counts.all === 1 ? 'clip' : 'clips'}</Text>
               </View>
             </View>
             <View style={s.subActions}>
@@ -177,14 +158,24 @@ export default function PostsScreen() {
           {/* Filter chips */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
             {FILTERS.map((f) => (
-              <FilterChip key={f.key} label={f.label} count={f.count} active={filter === f.key} onPress={() => setFilter(f.key)} />
+              <FilterChip key={f.key} label={f.label} count={counts[f.key]} active={filter === f.key} onPress={() => setFilter(f.key)} />
             ))}
           </ScrollView>
 
           {/* Feed */}
           <View style={s.feed}>
-            {visible.length === 0 ? (
-              <Text style={s.empty}>No clips in this state yet.</Text>
+            {listQ.isLoading ? (
+              <>
+                <Skeleton height={190} radius={20} />
+                <Skeleton height={190} radius={20} />
+              </>
+            ) : listQ.isError && !listQ.data ? (
+              <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" />
+            ) : visible.length === 0 ? (
+              <InlineMessage
+                icon="movie"
+                text={filter === 'all' ? 'No posts yet — new clips will appear here.' : 'No clips in this state yet.'}
+              />
             ) : (
               visible.map((post) => <PostCard key={post.id} post={post} />)
             )}
@@ -296,8 +287,7 @@ function Thumbnail({ post }: { post: Post }) {
 
   return (
     <View style={s.thumb}>
-      <Image source={{ uri: post.thumb }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
-      <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.55)'] as const} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['rgba(148,125,255,0.35)', 'rgba(0,0,0,0.6)'] as const} style={StyleSheet.absoluteFill} />
       {processing ? <BreathingOverlay /> : null}
 
       {published ? (
@@ -321,9 +311,6 @@ function Thumbnail({ post }: { post: Post }) {
         </View>
       ) : null}
 
-      <View style={s.duration}>
-        <Text style={s.durationText}>{post.duration}</Text>
-      </View>
     </View>
   );
 }
@@ -384,6 +371,8 @@ function CellStatus({ cell }: { cell: Cell }) {
           label={cell.value}
         />
       );
+    case 'none':
+      return <Pill tone="warning" icon={<MaterialIcons name="remove" size={12} color={C.muted} />} label="—" />;
     case 'queued':
       return <Pill tone="warning" icon={<MaterialIcons name="schedule" size={12} color={C.warning} />} label="Queued" />;
     case 'failed':
@@ -468,11 +457,11 @@ function NewCrossPostFab({ bottomOffset }: { bottomOffset: number }) {
   return (
     <View style={[s.fabWrap, { bottom: bottomOffset }]}>
       <Animated.View style={[s.fabGlow, glowStyle]} />
-      <Pressable accessibilityRole="button" style={({ pressed }) => [s.fab, pressed && s.pressFab]}>
+      <AnimatedPressable accessibilityRole="button" style={s.fab}>
         <LinearGradient colors={[C.violet, C.violetEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[StyleSheet.absoluteFill, s.fabFill]} />
         <MaterialIcons name="add" size={20} color={C.text} />
         <Text style={s.fabText}>New cross-post</Text>
-      </Pressable>
+      </AnimatedPressable>
     </View>
   );
 }
@@ -492,7 +481,9 @@ function TabBar({ bottomInset }: { bottomInset: number }) {
             onPress={() => router.replace(tab.path)}
             style={({ pressed }) => [s.tab, pressed && s.pressSoft]}
           >
-            <MaterialIcons name={tab.icon} size={24} color={color} />
+            <BounceIcon active={active}>
+              <MaterialIcons name={tab.icon} size={24} color={color} />
+            </BounceIcon>
             <Text style={[s.tabLabel, { color }]}>{tab.label}</Text>
             {active ? <View style={s.tabDot} /> : null}
           </Pressable>

@@ -1,9 +1,13 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
+import { useMe, useOverview, usePosts, useSocialAccounts } from '@/api/hooks';
+import { AnimatedPressable, BounceIcon, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { buildChart, captionBody, latestAnalytic, postStatus, shortDate, timeAgo, trendDelta } from '@/components/post-utils';
+import { formatCount } from '@/lib/format';
 import Animated, { Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
 const C = {
@@ -26,42 +30,6 @@ const C = {
   igMid: '#DD2A7B',
 } as const;
 
-const AVATAR =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuD05nthWKn36NBvj5vUwBxW_v7q2cGEXrWGS8TuQQK-uheJKVzk7YLL6T4qnrqUeEA9CINgZP-ub9WLuuNsvRfHqkMBlAzAv-Ftgs32saNCEnteIJQJEkvkQeuNJTWcD22bfI5XQLJt0VvAmU9wMbHhg9EO0pC704BwIDjlGogbx-nwGkW_AafINQlWYEZxuYrsm_LTdeK5Fvp7p4Hgm9MRs15G6lXN3r8d0bcQtvDC6kQMWoC_mQdqnA';
-
-const posts = [
-  {
-    title: '5 productivity tools that felt illegal to know 🚀',
-    sub: 'Stop doing manual data entry in 2024...',
-    dur: '0:42',
-    ago: 'Syndicated 2d ago',
-    tt: '1.2M',
-    yt: '780K',
-    ig: '420K',
-    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAMlxr3jPuJSCsRK9nFmr3WEzGMZq2lFSdjQZyVeoxgkyvoBeTfgssCkLiIsgtm-hl4OSco6NuOR5tkpeJeZ4moTogV4SYjxVoAr396YarT4kUlWx0FF-lZoGohlTZvF2Bb-x8K9aHHmgA6R4s_lxENIYQ0JUt9L4OyEM6rriMV9dj7PStjEEdR9PwEC7EroujojCBl-vAnEirhy9ppfxRoaFZkHFHHJVfYfIstVhoFJc1NHwfuBWUFzQ',
-  },
-  {
-    title: 'Why 99% of podcasts fail in their first 3 episodes',
-    sub: "Here's the distribution breakdown...",
-    dur: '0:35',
-    ago: 'Syndicated 4d ago',
-    tt: '450K',
-    yt: '290K',
-    ig: '185K',
-    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAOlzQQl2G0MOpCTWFgbzZjWPAItAU2Nyi3pg98CNDj9grzlbtCd3Ga1eCyWbEUCsyrVwRK1J4neAuMoejhcqkCfG_rjSHf-4wDTdZWkGGanAZN4WblRvjyaCZ0HI6lR3nF2ahU4z8BwBpbiHHKCJLnVbrVREllfiyx6n0YDU_4-tnmt8oUwx64rcn-1cF03EpS3LuCyy5rTVEBH6HAmaai3_oHssB8utwMIsUPL5NvnYkybZL5Br2YsQ',
-  },
-  {
-    title: 'My entire content workflow automated in 10 mins',
-    sub: 'Setup guide for multi-channel syndication...',
-    dur: '0:58',
-    ago: 'Syndicated 6d ago',
-    tt: '310K',
-    yt: '160K',
-    ig: '95K',
-    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDdtCvxGTKJCOI5XcEGshxH6ypEn6myKq_OOcTh7GiAMdIsODMUKXa7n99szajCrsEPg47MesrZ04CEX0Y1r_U2GIULn59PmtkOogUnInoIs--9gDHPjP3wdCcdipM_luaymiYjfHrDZ2Egk5i94P9FwyCTabgJsyd7f6Cz9DmtKz3lv9CWEDG6d3UdCUJQgnbEnk6MckfX4wiuOudrxC8JYY7gAIQZlepP-1spVCXjSzugyT1fhXUR1Q',
-  },
-] as const;
-
 const tabs = [
   { key: 'home', label: 'Home', icon: 'dashboard', href: '/dashboard' },
   { key: 'posts', label: 'Posts', icon: 'movie', href: '/posts' },
@@ -71,17 +39,15 @@ const tabs = [
 ] as const;
 
 const ranges = ['7d', '30d', '90d'] as const;
-const axis = ['Oct 01', 'Oct 08', 'Oct 16', 'Oct 24', 'Oct 30'] as const;
 
-// Chart geometry: the design's exact 340x160 viewBox and path data.
+// Chart geometry: the design's 340x160 viewBox. Path is generated from overview.trend;
+// FALLBACK_D (the design's curve shape) is only a flat placeholder when there is no trend data.
 const VW = 340;
 const VH = 160;
-const LINE_D = 'M0,135 C30,130 50,110 80,105 C110,100 130,115 160,85 C190,55 210,65 240,24 C270,55 310,40 340,30';
-const AREA_D = `${LINE_D} L340,160 L0,160 Z`;
-const LINE_LEN = 420;
+const FALLBACK_D = 'M0,135 L340,135';
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
-function Stat({ label, badge, icon, value, unit, children }: { label: string; badge?: string; icon?: 'electric-bolt'; value: string; unit: string; children?: React.ReactNode }) {
+function Stat({ label, badge, icon, value, unit, loading, children }: { label: string; badge?: string; icon?: 'electric-bolt'; value: string; unit: string; loading?: boolean; children?: React.ReactNode }) {
   return (
     <View style={s.stat}>
       <View style={s.statTop}>
@@ -96,7 +62,7 @@ function Stat({ label, badge, icon, value, unit, children }: { label: string; ba
         {children}
       </View>
       <View style={s.statBottom}>
-        <Text style={s.statValue}>{value}</Text>
+        {loading ? <Skeleton width={72} height={28} radius={6} /> : <Text style={s.statValue}>{value}</Text>}
         <Text style={s.statUnit}>{unit}</Text>
       </View>
     </View>
@@ -106,6 +72,52 @@ function Stat({ label, badge, icon, value, unit, children }: { label: string; ba
 export default function Dashboard() {
   const [range, setRange] = useState<(typeof ranges)[number]>('30d');
   const [chartW, setChartW] = useState(0);
+
+  const me = useMe();
+  const overviewQ = useOverview(range);
+  const postsQ = usePosts('all');
+  const accountsQ = useSocialAccounts();
+  const overview = overviewQ.data;
+  const posts = (postsQ.data ?? []).slice(0, 3);
+  const accounts = accountsQ.data ?? [];
+  const ovLoading = overviewQ.isLoading;
+  const connectedCount = overview?.connected_accounts ?? accounts.filter((a) => a.connected).length;
+  const delta = trendDelta(overview?.trend);
+  const deltaBadge = delta !== null && delta > 0 ? `${delta.toFixed(1)}%` : undefined;
+
+  const userName = me.data?.user?.name?.trim() || 'there';
+  const firstName = userName.split(' ')[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const handleSrc = accounts.find((a) => a.handle)?.handle ?? me.data?.user?.email?.split('@')[0] ?? null;
+  const handle = handleSrc ? `@${handleSrc.replace(/^@/, '')}` : '@creator';
+  const avatarUri = me.data?.user?.avatar ?? null;
+
+  const trend = useMemo(() => overview?.trend ?? [], [overview?.trend]);
+  const chart = useMemo(() => buildChart(trend.map((t) => t.views ?? 0)), [trend]);
+  const lineD = chart?.d ?? FALLBACK_D;
+  const areaD = `${lineD} L340,160 L0,160 Z`;
+  const lineLen = chart?.len ?? 420;
+  const axisLabels = useMemo(() => {
+    if (trend.length < 2) return [] as { label: string; idx: number }[];
+    return [0, 1, 2, 3, 4].map((k) => {
+      const idx = Math.round((k * (trend.length - 1)) / 4);
+      return { label: shortDate(trend[idx].date), idx };
+    });
+  }, [trend]);
+  const axisOnIdx = useMemo(() => {
+    if (!chart || !axisLabels.length) return -1;
+    let best = 0;
+    axisLabels.forEach((a, i) => {
+      if (Math.abs(a.idx - chart.peak) < Math.abs(axisLabels[best].idx - chart.peak)) best = i;
+    });
+    return best;
+  }, [chart, axisLabels]);
+  const tipText = chart ? `${shortDate(trend[chart.peak]?.date)} • ${formatCount(trend[chart.peak]?.views ?? 0)} views` : '';
+  const lenSv = useSharedValue(420);
+  useEffect(() => {
+    lenSv.value = lineLen;
+  }, [lineLen, lenSv]);
 
   const pulse = useSharedValue(1);
   const ping = useSharedValue(0);
@@ -124,7 +136,7 @@ export default function Dashboard() {
 
   const pulseStyle = useAnimatedStyle(() => ({ opacity: 0.4 + pulse.value * 0.6 }));
   const pingStyle = useAnimatedStyle(() => ({ opacity: 0.75 * (1 - ping.value), transform: [{ scale: 1 + ping.value * 2 }] }));
-  const lineProps = useAnimatedProps(() => ({ strokeDashoffset: LINE_LEN * (1 - reveal.value) }));
+  const lineProps = useAnimatedProps(() => ({ strokeDashoffset: lenSv.value * (1 - reveal.value) }));
   const areaProps = useAnimatedProps(() => ({ opacity: Math.min(1, Math.max(0, (reveal.value - 0.55) / 0.45)) }));
   const popStyle = useAnimatedStyle(() => ({ opacity: pop.value, transform: [{ translateY: (1 - pop.value) * 6 }] }));
   const b0 = useAnimatedStyle(() => ({ opacity: bars[0].value, transform: [{ scaleX: 0.4 + 0.6 * bars[0].value }] }));
@@ -135,8 +147,8 @@ export default function Dashboard() {
   const chartH = 144;
   const sx = chartW / VW;
   const sy = chartH / VH;
-  const hx = 240 * sx;
-  const hy = 24 * sy;
+  const hx = (chart?.peakX ?? 0) * sx;
+  const hy = (chart?.peakY ?? 0) * sy;
 
   return (
     <View style={s.safe}>
@@ -164,17 +176,23 @@ export default function Dashboard() {
         <View style={s.greet}>
           <View style={s.greetLeft}>
             <View style={s.avatarWrap}>
-              <Image source={{ uri: AVATAR }} style={s.avatar} />
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={s.avatar} />
+              ) : (
+                <View style={[s.avatar, s.avatarFallback]}>
+                  <MaterialIcons name="person" size={26} color={C.onPrimary} />
+                </View>
+              )}
               <View style={s.online}>
                 <View style={s.onlineIn} />
               </View>
             </View>
             <View style={s.flex}>
               <View style={s.nameRow}>
-                <Text numberOfLines={2} style={s.name}>Good morning, Alex</Text>
+                <Text numberOfLines={2} style={s.name}>{greeting}, {firstName}</Text>
                 <Text style={s.wave}>👋</Text>
               </View>
-              <Text style={s.handle}>@alexcreates • Pro Tier</Text>
+              <Text style={s.handle}>{handle}</Text>
             </View>
           </View>
           <View style={s.sync}>
@@ -185,14 +203,15 @@ export default function Dashboard() {
 
         {/* Metrics */}
         <View style={s.grid}>
-          <Stat label="Total Views" badge="14.2%" value="2.4M" unit="views" />
-          <Stat label="Total Likes" badge="8.5%" value="385K" unit="likes" />
-          <Stat label="Published" icon="electric-bolt" value="48" unit="clips" />
-          <Stat label="Connected" value="3 of 3" unit="hubs">
+          <Stat label="Total Views" badge={deltaBadge} value={formatCount(overview?.total_views ?? 0)} unit="views" loading={ovLoading} />
+          <Stat label="Total Likes" value={formatCount(overview?.total_likes ?? 0)} unit="likes" loading={ovLoading} />
+          <Stat label="Published" icon="electric-bolt" value={formatCount(overview?.posts_published ?? 0)} unit="clips" loading={ovLoading} />
+          <Stat label="Connected" value={`${connectedCount} of 3`} unit="hubs" loading={ovLoading && accountsQ.isLoading}>
             <View style={s.dots}>
-              <View style={[s.dotC, { backgroundColor: C.cyan }]} />
-              <View style={[s.dotC, s.dotOverlap, { backgroundColor: C.youtube }]} />
-              <View style={[s.dotC, s.dotOverlap, { backgroundColor: C.igMid }]} />
+              {([['tiktok', C.cyan], ['youtube', C.youtube], ['instagram', C.igMid]] as const).map(([pl, color], i) => {
+                const on = accounts.some((a) => a.provider === pl && a.connected);
+                return <View key={pl} style={[s.dotC, i > 0 && s.dotOverlap, { backgroundColor: on ? color : C.highest }]} />;
+              })}
             </View>
           </Stat>
         </View>
@@ -228,17 +247,18 @@ export default function Dashboard() {
                     {[35, 80, 125].map((y) => (
                       <Line key={y} x1={0} x2={340} y1={y} y2={y} stroke="#353439" strokeOpacity={0.4} strokeWidth={0.75} strokeDasharray="3 4" />
                     ))}
-                    <AnimatedPath d={AREA_D} fill="url(#dashPerfFill)" animatedProps={areaProps} />
+                    <AnimatedPath d={areaD} fill="url(#dashPerfFill)" animatedProps={areaProps} />
                     <AnimatedPath
-                      d={LINE_D}
+                      d={lineD}
                       fill="none"
                       stroke={C.primary}
                       strokeWidth={2.5}
                       strokeLinecap="round"
-                      strokeDasharray={LINE_LEN}
+                      strokeDasharray={lineLen}
                       animatedProps={lineProps}
                     />
                   </Svg>
+                  {chart ? (
                   <Animated.View style={[StyleSheet.absoluteFill, popStyle]} pointerEvents="none">
                     <View style={[s.guide, { left: hx, top: 15 * sy, height: 140 * sy }]} />
                     <View style={[s.focal, { left: hx - 5, top: hy - 5 }]}>
@@ -250,18 +270,27 @@ export default function Dashboard() {
                           <Animated.View style={[s.tipPing, pingStyle]} />
                           <View style={s.tipDot} />
                         </View>
-                        <Text style={s.tipText}>Oct 24 • 142.5K views</Text>
+                        <Text style={s.tipText}>{tipText}</Text>
                       </View>
                     </View>
                   </Animated.View>
+                  ) : null}
                 </>
               )}
             </View>
-            <View style={s.axis}>
-              {axis.map((a, i) => (
-                <Text key={a} style={[s.axisText, i === 3 && s.axisOn]}>{a}</Text>
-              ))}
-            </View>
+            {overviewQ.isError && !overview ? (
+              <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" style={s.chartMsg} />
+            ) : ovLoading ? (
+              <Skeleton height={14} style={s.chartMsg} />
+            ) : !chart ? (
+              <InlineMessage icon="show-chart" text="No activity yet for this period" style={s.chartMsg} />
+            ) : (
+              <View style={s.axis}>
+                {axisLabels.map((a, i) => (
+                  <Text key={`${a.idx}-${i}`} style={[s.axisText, i === axisOnIdx && s.axisOn]}>{a.label}</Text>
+                ))}
+              </View>
+            )}
           </View>
         </View>
 
@@ -270,44 +299,61 @@ export default function Dashboard() {
           <View style={s.postsHead}>
             <View style={s.titleRow}>
               <Text style={s.h2}>Top Posts</Text>
-              <Text style={s.active}>3 active</Text>
+              <Text style={s.active}>{posts.length} active</Text>
             </View>
-            <Pressable style={s.viewAll} onPress={() => router.push('/posts' as never)}>
+            <AnimatedPressable style={s.viewAll} onPress={() => router.push('/posts' as never)}>
               <Text style={s.viewAllText}>View all</Text>
               <MaterialIcons name="chevron-right" size={16} color={C.primary} />
-            </Pressable>
+            </AnimatedPressable>
           </View>
 
-          {posts.map((p) => (
-            <View style={s.post} key={p.title}>
+          {postsQ.isError && !postsQ.data ? (
+            <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" />
+          ) : postsQ.isLoading ? (
+            <>
+              <Skeleton height={168} radius={12} />
+              <Skeleton height={168} radius={12} />
+            </>
+          ) : posts.length === 0 ? (
+            <InlineMessage icon="movie" text="No posts yet — your syndicated clips will show up here." />
+          ) : null}
+
+          {posts.map((p) => {
+            const status = postStatus(p);
+            const tone = status === 'published' ? C.success : status === 'failed' ? '#EA5455' : '#FF9F43';
+            const label = status === 'published' ? 'Published' : status === 'failed' ? 'Failed' : 'Processing';
+            const v = (pl: 'tiktok' | 'youtube' | 'instagram') => {
+              const a = latestAnalytic(p, pl);
+              return a ? formatCount(a.views) : '—';
+            };
+            return (
+            <Pressable style={s.post} key={p.id} onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(p.id) } })}>
               <View style={s.postTop}>
                 <View style={s.thumb}>
-                  <Image source={{ uri: p.img }} style={s.thumbImg} />
-                  <LinearGradient colors={['#13131700', '#131317CC'] as const} style={StyleSheet.absoluteFill} />
+                  <LinearGradient colors={['#947DFF55', '#131317CC'] as const} style={StyleSheet.absoluteFill} />
                   <View style={s.playWrap}>
                     <View style={s.play}>
                       <MaterialIcons name="play-arrow" size={14} color={C.text} />
                     </View>
                   </View>
-                  <Text style={s.dur}>{p.dur}</Text>
                 </View>
                 <View style={s.postBody}>
                   <View>
                     <View style={s.postTitleRow}>
                       <Text numberOfLines={2} style={s.postTitle}>{p.title}</Text>
-                      <Text style={s.published}>Published</Text>
+                      <Text style={[s.published, { color: tone, backgroundColor: `${tone}26` }]}>{label}</Text>
                     </View>
-                    <Text numberOfLines={1} style={s.postSub}>{p.sub}</Text>
+                    <Text numberOfLines={1} style={s.postSub}>{captionBody(p.caption) || ' '}</Text>
                   </View>
-                  <Text style={s.ago}>{p.ago}</Text>
+                  <Text style={s.ago}>{p.published_at ? `Syndicated ${timeAgo(p.published_at)}` : 'Not published yet'}</Text>
                 </View>
               </View>
               <View style={s.dist}>
                 {(
                   [
-                    ['TIKTOK', p.tt, C.cyan],
-                    ['SHORTS', p.yt, C.youtube],
-                    ['REELS', p.ig, C.igMid],
+                    ['TIKTOK', v('tiktok'), C.cyan],
+                    ['SHORTS', v('youtube'), C.youtube],
+                    ['REELS', v('instagram'), C.igMid],
                   ] as const
                 ).map(([name, val, color], i) => (
                   <Animated.View key={name} style={[s.distItem, barStyles[i]]}>
@@ -319,8 +365,9 @@ export default function Dashboard() {
                   </Animated.View>
                 ))}
               </View>
-            </View>
-          ))}
+            </Pressable>
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -335,7 +382,9 @@ export default function Dashboard() {
                 style={({ pressed }) => [s.tab, pressed && s.press]}
                 onPress={() => (on ? undefined : router.replace(t.href as never))}
               >
-                <MaterialIcons name={t.icon} size={24} color={on ? C.primaryContainer : C.muted} />
+                <BounceIcon active={on}>
+                  <MaterialIcons name={t.icon} size={24} color={on ? C.primaryContainer : C.muted} />
+                </BounceIcon>
                 <Text style={[s.tabText, { color: on ? C.primaryContainer : C.muted }]}>{t.label}</Text>
                 {on && <View style={s.tabDot} />}
               </Pressable>
@@ -368,6 +417,8 @@ const s = StyleSheet.create({
   greetLeft: { flexDirection: 'row', alignItems: 'center', gap: 16, flex: 1 },
   avatarWrap: { width: 48, height: 48 },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: C.high },
+  avatarFallback: { backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
+  chartMsg: { marginTop: 8 },
   online: {
     position: 'absolute', right: 0, bottom: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: C.success,
     borderWidth: 2, borderColor: C.surface, alignItems: 'center', justifyContent: 'center',
