@@ -10,7 +10,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { usePosts } from '@/api/hooks';
 import type { Post as ApiPost, Platform } from '@/api/types';
-import { AnimatedPressable, BounceIcon, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
 import { captionBody, hashtagsOf, latestAnalytic, postStatus, timeAgo } from '@/components/post-utils';
 import { formatCount } from '@/lib/format';
 
@@ -95,14 +95,6 @@ const FILTERS: { key: 'all' | Status; label: string }[] = [
   { key: 'failed', label: 'Failed' },
 ];
 
-const TABS = [
-  { key: 'home', label: 'Home', icon: 'dashboard', path: '/dashboard' },
-  { key: 'posts', label: 'Posts', icon: 'movie', path: '/posts' },
-  { key: 'connect', label: 'Connect', icon: 'sync-alt', path: '/connect' },
-  { key: 'insights', label: 'Insights', icon: 'insights', path: '/insights' },
-  { key: 'profile', label: 'Profile', icon: 'account-circle', path: '/profile' },
-] as const;
-
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<'all' | Status>('all');
@@ -186,8 +178,7 @@ export default function PostsScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      <NewCrossPostFab bottomOffset={64 + insets.bottom + 16} />
-      <TabBar bottomInset={insets.bottom} />
+      <NewCrossPostFab bottomOffset={insets.bottom + 16} />
     </View>
   );
 }
@@ -466,33 +457,6 @@ function NewCrossPostFab({ bottomOffset }: { bottomOffset: number }) {
         <MaterialIcons name="add" size={20} color={C.text} />
         <Text style={s.fabText}>New cross-post</Text>
       </AnimatedPressable>
-    </View>
-  );
-}
-
-function TabBar({ bottomInset }: { bottomInset: number }) {
-  return (
-    <View style={[s.tabbar, { paddingBottom: bottomInset }]}>
-      {TABS.map((tab) => {
-        const active = tab.key === 'posts';
-        const color = active ? C.primaryContainer : C.muted;
-        return (
-          <Pressable
-            key={tab.key}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={tab.label}
-            onPress={() => router.replace(tab.path)}
-            style={({ pressed }) => [s.tab, pressed && s.pressSoft]}
-          >
-            <BounceIcon active={active}>
-              <MaterialIcons name={tab.icon} size={24} color={color} />
-            </BounceIcon>
-            <Text style={[s.tabLabel, { color }]}>{tab.label}</Text>
-            {active ? <View style={s.tabDot} /> : null}
-          </Pressable>
-        );
-      })}
     </View>
   );
 }

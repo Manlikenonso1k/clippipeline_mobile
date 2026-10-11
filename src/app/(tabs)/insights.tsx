@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 import { useOverview, usePosts } from '@/api/hooks';
-import { AnimatedPressable, BounceIcon, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
 import { buildChart, latestAnalytic, shortDate, totalsFor, trendDelta } from '@/components/post-utils';
 import { formatCount, formatWatchTime } from '@/lib/format';
 import Animated, {
@@ -73,14 +73,6 @@ const PERIODS = [
 
 const PLATFORMS = ['All Platforms', 'TikTok', 'YouTube', 'Instagram'] as const;
 type Platform = (typeof PLATFORMS)[number];
-
-const TABS = [
-  { label: 'Home', icon: 'dashboard', route: '/dashboard' },
-  { label: 'Posts', icon: 'movie', route: '/posts' },
-  { label: 'Connect', icon: 'sync-alt', route: '/connect' },
-  { label: 'Insights', icon: 'show-chart', route: '/insights' },
-  { label: 'Profile', icon: 'account-circle', route: '/profile' },
-] as const;
 
 // ---- Small animated pieces ----
 const SPARK_LEN = 130;
@@ -593,23 +585,6 @@ export default function Insights() {
         </ScrollView>
       </SafeAreaView>
 
-      {/* Bottom tab bar */}
-      <SafeAreaView style={s.navWrap}>
-        <View style={s.nav}>
-          {TABS.map((t) => {
-            const on = t.label === 'Insights';
-            return (
-              <Pressable key={t.label} style={s.tab} onPress={() => !on && router.push(t.route as never)}>
-                <BounceIcon active={on}>
-                  <MaterialIcons name={t.icon} size={24} color={on ? C.primaryContainer : C.muted} />
-                </BounceIcon>
-                <Text style={[s.label, { marginTop: 2, color: on ? C.primaryContainer : C.muted }]}>{t.label}</Text>
-                {on ? <View style={s.tabDot} /> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-      </SafeAreaView>
     </View>
   );
 }

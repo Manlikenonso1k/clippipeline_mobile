@@ -1,12 +1,11 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { usePosts, useSocialAccounts } from '@/api/hooks';
 import type { Platform } from '@/api/types';
-import { AnimatedPressable, BounceIcon, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
 import { formatCount, formatDate } from '@/lib/format';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
@@ -37,14 +36,6 @@ const C = {
   metaViolet: '#7C5CFF',
   metaPurple: '#B14CFF',
 } as const;
-
-const TABS = [
-  { label: 'Home', icon: 'dashboard', path: '/dashboard' },
-  { label: 'Posts', icon: 'movie', path: '/posts' },
-  { label: 'Connect', icon: 'sync-alt', path: '/connect' },
-  { label: 'Insights', icon: 'show-chart', path: '/insights' },
-  { label: 'Profile', icon: 'account-circle', path: '/profile' },
-] as const;
 
 const PIPELINE_RULES = [
   { icon: 'water-drop', color: C.success, label: 'Automatic Watermark Removal', value: 'Active', valueColor: C.success },
@@ -322,32 +313,6 @@ export default function ConnectScreen() {
         </View>
       </ScrollView>
 
-      {/* Bottom tab bar */}
-      <View style={s.tabBar}>
-        {TABS.map((tab) => {
-          const active = tab.path === '/connect';
-          const color = active ? C.primaryContainer : C.muted;
-          return (
-            <Pressable
-              key={tab.path}
-              accessibilityRole="tab"
-              accessibilityLabel={tab.label}
-              accessibilityState={{ selected: active }}
-              onPress={() => {
-                // Tab targets are registered in _layout.tsx but not all are in the typed-routes union yet.
-                if (!active) router.navigate(tab.path as never);
-              }}
-              style={s.tab}
-            >
-              <BounceIcon active={active}>
-                <MaterialIcons name={tab.icon} size={24} color={color} />
-              </BounceIcon>
-              <Text style={[s.tabLabel, { color }]}>{tab.label}</Text>
-              {active ? <View style={s.tabIndicator} /> : null}
-            </Pressable>
-          );
-        })}
-      </View>
     </SafeAreaView>
   );
 }

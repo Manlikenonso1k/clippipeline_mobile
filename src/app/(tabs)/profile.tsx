@@ -1,6 +1,6 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, type Href } from 'expo-router';
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -16,7 +16,7 @@ import Animated, {
 
 import { BottomTabInset } from '@/constants/theme';
 import { useMe, useOverview, useSocialAccounts } from '@/api/hooks';
-import { AnimatedPressable, BounceIcon, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
 import { formatCount } from '@/lib/format';
 import { useAuthStore } from '@/store/authStore';
 
@@ -44,14 +44,6 @@ const C = {
 } as const;
 
 type IconName = ComponentProps<typeof MaterialIcons>['name'];
-
-const TABS = [
-  ['Home', 'dashboard', '/dashboard'],
-  ['Posts', 'movie', '/posts'],
-  ['Connect', 'sync-alt', '/connect'],
-  ['Insights', 'monitor', '/insights'],
-  ['Profile', 'account-circle', '/profile'],
-] as const;
 
 const CLIP_LIMIT = 100; // plan allowance shown in the design (Pro tier); no plan endpoint exists yet.
 
@@ -429,30 +421,6 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
-      {/* Bottom tab bar */}
-      <View style={s.tabBar}>
-        {TABS.map(([label, icon, path]) => {
-          const active = label === 'Profile';
-          return (
-            <Pressable
-              key={label}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              onPress={() => {
-                // '/posts' is not a typed route in this build yet; cast keeps the spec'd target.
-                if (!active) router.replace(path as Href);
-              }}
-              style={s.tab}
-            >
-              <BounceIcon active={active}>
-                <MaterialIcons name={icon} size={24} color={active ? C.violet : C.muted} />
-              </BounceIcon>
-              <Text style={[s.tabLabel, active && s.tabLabelActive]}>{label}</Text>
-              {active ? <View style={s.tabDot} /> : null}
-            </Pressable>
-          );
-        })}
-      </View>
     </SafeAreaView>
   );
 }

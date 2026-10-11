@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 import { useMe, useOverview, usePosts, useSocialAccounts } from '@/api/hooks';
-import { AnimatedPressable, BounceIcon, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
 import { buildChart, captionBody, latestAnalytic, postStatus, shortDate, timeAgo, trendDelta } from '@/components/post-utils';
 import { formatCount } from '@/lib/format';
 import Animated, { Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
@@ -29,14 +29,6 @@ const C = {
   youtube: '#FF0000',
   igMid: '#DD2A7B',
 } as const;
-
-const tabs = [
-  { key: 'home', label: 'Home', icon: 'dashboard', href: '/dashboard' },
-  { key: 'posts', label: 'Posts', icon: 'movie', href: '/posts' },
-  { key: 'connect', label: 'Connect', icon: 'sync-alt', href: '/connect' },
-  { key: 'insights', label: 'Insights', icon: 'insights', href: '/insights' },
-  { key: 'profile', label: 'Profile', icon: 'account-circle', href: '/profile' },
-] as const;
 
 const ranges = ['7d', '30d', '90d'] as const;
 
@@ -370,28 +362,6 @@ export default function Dashboard() {
           })}
         </View>
       </ScrollView>
-
-      {/* Bottom tab bar */}
-      <SafeAreaView style={s.nav}>
-        <View style={s.navRow}>
-          {tabs.map((t) => {
-            const on = t.key === 'home';
-            return (
-              <Pressable
-                key={t.key}
-                style={({ pressed }) => [s.tab, pressed && s.press]}
-                onPress={() => (on ? undefined : router.replace(t.href as never))}
-              >
-                <BounceIcon active={on}>
-                  <MaterialIcons name={t.icon} size={24} color={on ? C.primaryContainer : C.muted} />
-                </BounceIcon>
-                <Text style={[s.tabText, { color: on ? C.primaryContainer : C.muted }]}>{t.label}</Text>
-                {on && <View style={s.tabDot} />}
-              </Pressable>
-            );
-          })}
-        </View>
-      </SafeAreaView>
     </View>
   );
 }

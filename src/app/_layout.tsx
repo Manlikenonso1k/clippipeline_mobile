@@ -47,11 +47,7 @@ export default function RootLayout() {
           <Stack.Screen name="login" />
           <Stack.Screen name="welcome/two" />
           <Stack.Screen name="welcome/three" />
-          <Stack.Screen name="dashboard" />
-          <Stack.Screen name="connect" />
-          <Stack.Screen name="posts" />
-          <Stack.Screen name="insights" />
-          <Stack.Screen name="profile" />
+          <Stack.Screen name="(tabs)" />
           <Stack.Screen name="post/[id]" />
         </Stack>
       </ThemeProvider>
