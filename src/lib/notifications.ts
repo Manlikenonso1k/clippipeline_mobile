@@ -1,10 +1,12 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { apiFetch } from '@/api/client';
-import { useAuthStore } from '@/store/authStore';
+
+const WELCOME_KEY = 'clippipeline_welcome_shown';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -67,10 +69,10 @@ export async function registerForPushTokenAsync(): Promise<string | null> {
 }
 
 // Register this device's Expo push token with the backend so the server can
-// send pushes. Best-effort and only when the user is signed in.
+// send pushes. Works signed-out too (anonymous device) so announcements can
+// reach everyone; re-runs on login to attach the token to the user.
 export async function syncPushTokenToBackend(): Promise<void> {
   try {
-    if (!useAuthStore.getState().token) return;
     const token = await registerForPushTokenAsync();
     if (!token) return;
     await apiFetch('/device-tokens', {
@@ -79,6 +81,32 @@ export async function syncPushTokenToBackend(): Promise<void> {
     });
   } catch {
     // ignore — push-token sync is best-effort
+  }
+}
+
+// Fire a one-time "welcome" LOCAL notification on first launch — needs no
+// login, no server, no FCM. Just proves notifications work and greets the user.
+export async function maybeSendWelcomeNotification(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const already = await SecureStore.getItemAsync(WELCOME_KEY).catch(() => null);
+    if (already) return;
+    if (!(await requestNotificationPermissions())) return;
+    await SecureStore.setItemAsync(WELCOME_KEY, '1').catch(() => {});
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Welcome to ClipPipeline 🎉',
+        body: 'Post once, everywhere. Connect a channel and your clips auto-sync to TikTok, YouTube & Instagram.',
+        data: { type: 'welcome' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 4,
+        ...(Platform.OS === 'android' ? { channelId: 'sync' } : {}),
+      },
+    });
+  } catch {
+    // ignore
   }
 }
 

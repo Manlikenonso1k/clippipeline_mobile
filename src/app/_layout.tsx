@@ -7,6 +7,7 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { queryClient } from '@/api/hooks';
 import * as Notifications from 'expo-notifications';
 import {
+  maybeSendWelcomeNotification,
   registerNotificationChannels,
   requestNotificationPermissions,
   syncPushTokenToBackend,
@@ -28,6 +29,7 @@ export default function RootLayout() {
         await registerNotificationChannels();
         await requestNotificationPermissions();
         await syncPushTokenToBackend();
+        await maybeSendWelcomeNotification();
       } catch {
         // silent
       }
