@@ -3,6 +3,9 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import { apiFetch } from '@/api/client';
+import { useAuthStore } from '@/store/authStore';
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -60,6 +63,22 @@ export async function registerForPushTokenAsync(): Promise<string | null> {
     return token.data ?? null;
   } catch {
     return null;
+  }
+}
+
+// Register this device's Expo push token with the backend so the server can
+// send pushes. Best-effort and only when the user is signed in.
+export async function syncPushTokenToBackend(): Promise<void> {
+  try {
+    if (!useAuthStore.getState().token) return;
+    const token = await registerForPushTokenAsync();
+    if (!token) return;
+    await apiFetch('/device-tokens', {
+      method: 'POST',
+      body: JSON.stringify({ token, platform: Platform.OS }),
+    });
+  } catch {
+    // ignore — push-token sync is best-effort
   }
 }
 

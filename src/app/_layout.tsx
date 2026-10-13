@@ -1,4 +1,4 @@
-﻿import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+﻿import { DarkTheme, router, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -7,9 +7,9 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { queryClient } from '@/api/hooks';
 import * as Notifications from 'expo-notifications';
 import {
-  registerForPushTokenAsync,
   registerNotificationChannels,
   requestNotificationPermissions,
+  syncPushTokenToBackend,
 } from '@/lib/notifications';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -27,15 +27,33 @@ export default function RootLayout() {
       try {
         await registerNotificationChannels();
         await requestNotificationPermissions();
-        await registerForPushTokenAsync();
+        await syncPushTokenToBackend();
       } catch {
         // silent
       }
     })();
-    const sub = Notifications.addNotificationResponseReceivedListener(() => {
-      // no-op: hook for routing on notification tap
+
+    // Re-register this device's push token whenever the user signs in.
+    const unsub = useAuthStore.subscribe((state, prev) => {
+      if (state.token && state.token !== prev.token) {
+        syncPushTokenToBackend();
+      }
     });
-    return () => sub.remove();
+
+    // Tap-to-open: route to the relevant screen from the notification payload.
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as
+        | { screen?: string; postId?: number | string }
+        | undefined;
+      if (data?.screen === 'post' && data.postId != null) {
+        router.push({ pathname: '/post/[id]', params: { id: String(data.postId) } });
+      }
+    });
+
+    return () => {
+      unsub();
+      sub.remove();
+    };
   }, []);
 
   return (
