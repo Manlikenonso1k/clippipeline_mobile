@@ -52,3 +52,8 @@ expo-web.error.log
 
 # lockfile excluded from EAS build (npm version drift); EAS uses npm install
 package-lock.json
+
+# Firebase service-account keys (SECRET — never commit)
+*-firebase-adminsdk-*.json
+firebase-adminsdk*.json
+service-account*.json
