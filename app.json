@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.codebynonso.clippipeline",
-      "versionCode": 9,
+      "versionCode": 10,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#000000",

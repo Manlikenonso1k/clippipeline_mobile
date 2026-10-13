@@ -9,8 +9,10 @@
 
 | Piece | Location (this PC) | GitHub | Branch | Live |
 |---|---|---|---|---|
-| Mobile app (Expo/React Native) | `Documents/clippipeline-mobile` | `Manlikenonso1k/clippipeline_mobile` | `feat/app-screens-auth-charts` | — |
-| Backend (Laravel 12 + Filament) | `Documents/clippipeline.com` | `Manlikenonso1k/clippipeline` | `main` | `clippipeline.nonsostudio.com` |
+| Mobile app (Expo/React Native) | `Documents/clippipeline_mobile` | `Manlikenonso1k/clippipeline_mobile` | `feat/app-screens-auth-charts` | — |
+| Backend (Laravel 12 + Filament) | `Documents/clippipeline` | `Manlikenonso1k/clippipeline` | `main` | `clippipeline.nonsostudio.com` |
+
+> **Go-live update (2026-10-14):** see "Go-live: what changed" at the bottom. The API contract is `docs/CONTRACT.md` (same file in both repos) — the single source of truth for endpoints and mobile types.
 
 - **Mobile:** Expo SDK 57, Expo Router, TypeScript. Package `com.codebynonso.clippipeline`. EAS project `@codebynonso/clippipeline-mobile`. Config is **`app.json`** (not app.config.ts).
 - **Backend:** Laravel 12, Sanctum API auth, Filament admin, PHP 8.3. Hosted on Hostinger at `/home/u519226541/domains/nonsostudio.com/public_html/clippipeline`. MySQL.
@@ -100,3 +102,47 @@ git pull origin main
 ```
 
 **Three notification types that exist:** welcome/local (automatic, first launch), broadcast (`push:broadcast`, all devices, no login), per-user (`push:test` + automatic failed/published alerts, user must be logged in).
+
+---
+
+## Go-live: what changed (2026-10-14)
+
+Built on `feat/go-live` in both repos, merged into backend `main` and mobile `feat/app-screens-auth-charts`.
+
+**Backend**
+- **Connect** (`app/Services/Connect/*`): `GET /api/connect/{youtube|meta|tiktok}/start?platform=web|mobile` returns an auth URL with an encrypted signed state. It reuses the production callbacks `/integrations/callback/{youtube|instagram|tiktok}`; the callback no longer needs a web session. Mobile is sent back to `clippipelinemobile://connect?provider=..&status=ok|error`.
+  - Meta creates `facebook` (Page token) and `instagram` (IG business id in `external_id`) rows.
+  - Tokens use `encrypted` casts; a migration encrypts the existing tokens.
+  - `TokenManager::freshAccessToken()` refreshes tokens. A failed refresh marks the account `needs_reauth` and sends a push.
+  - Graph API pinned to v26.0 (`META_GRAPH_VERSION`).
+  - Commands: `accounts:refresh-tokens` (hourly) and `app:backfill-accounts`.
+- **Publish:** `POST /api/posts` (multipart) stores on the public disk, HEAD-checks the URL, then creates one distribution and one job per platform.
+  - Jobs: YouTube resumable, IG Reels, FB Page Reels, TikTok direct post (FILE_UPLOAD).
+  - Status flow `queued → uploading → processing → published | failed`. Jobs are idempotent and unique, with 3 real failures max.
+  - `POST /api/distributions/{id}/retry`, plus a Filament Retry action.
+  - `posts:dispatch-scheduled` publishes posts when `scheduled_at` is due.
+  - Thumbnails come from each platform's own thumbnail URL (no ffmpeg).
+  - TikTok's official API can't download videos, so upload-once is the main flow and the scraper ingest is optional.
+- **Analytics:** `App\Services\AnalyticsService` is the only source for both the API and the Filament widgets.
+  - Daily lifetime snapshots go in `post_analytics` (unique per distribution per day) and `account_follower_snapshots`.
+  - `analytics:sync` runs every 3h, plus `--recent` about 1h after a publish.
+  - Endpoints: `/api/analytics/{overview,platforms,timeseries,top-posts}` and `/api/posts/{id}/analytics`.
+- **Web (Filament):** Connected Accounts page (connect/reconnect/disconnect with status and expiry). The Posts resource is scoped to the owner, with upload + platforms on create and a distributions table that polls and retries. Dashboard widgets with a 7d/30d/90d filter; the old sample-data widgets were removed.
+- **QA commands:** `app:smoke {email}` (refresh + one call per platform) and `app:test-crosspost {email} {path}` (real post, YouTube private / TikTok SELF_ONLY).
+- **Scheduler** (`routes/console.php`): `queue:work --stop-when-empty --max-time=50` every minute (no supervisor on Hostinger), scheduled dispatch, token refresh, analytics sync.
+
+**Mobile**
+- `src/api/types.ts` mirrors CONTRACT.md, and `src/api/hooks.ts` has a hook per endpoint. Demo data only appears in guest mode (no token).
+- Connect screen uses `WebBrowser.openAuthSessionAsync`, with a deep-link fallback.
+- Create post at `src/app/post/new.tsx`: `expo-image-picker@~57.0.20`, XHR upload with a progress bar, choice of active platforms, optional schedule.
+- Post details: polls every 5s while any platform is publishing, Retry, per-platform metrics, open-on-platform link.
+- Dashboard and Insights show real data for 7d/30d/90d, with pull-to-refresh and refetch on focus. A push invalidates the post and analytics queries.
+
+**Left to do**
+- `/admin` is still limited to `is_admin` users (`User::canAccessPanel`). Promote users with `app:make-admin <email>`, or open the panel to all users (resources and widgets are already scoped to the owner).
+- `TiktokInsights` Filament page still renders placeholder values. Hide it or rewire it to AnalyticsService.
+- Not yet verified on a device: upload progress, Android `openAuthSessionAsync` result handling.
+- Not yet run against the real platforms: `app:test-crosspost` and `app:smoke`. Run both on the server after deploy.
+- IG/FB/TikTok thumbnail URLs expire. Consider copying them to storage.
+- TikTok follower counts need the `user.info.stats` scope.
+- Out of scope today: billing UI, iOS build, dynamic icon, swipe tabs, digest notifications.
