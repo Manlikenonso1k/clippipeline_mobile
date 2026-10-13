@@ -173,7 +173,8 @@ export interface PostPlatformAnalytics {
   distribution_id: number;
   status: DistributionStatus;
   url: string | null;
-  captured_on: string;
+  /** null until the first snapshot exists */
+  captured_on: string | null;
   metrics: Metrics;
   points: MetricsPoint[];
 }
