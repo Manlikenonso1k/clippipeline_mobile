@@ -16,6 +16,8 @@ import Animated, {
 
 import { BottomTabInset } from '@/constants/theme';
 import { useMe, useOverview, useSocialAccounts } from '@/api/hooks';
+import type { Platform } from '@/api/types';
+import { PLATFORM_LABEL } from '@/components/post-utils';
 import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
 import { formatCount } from '@/lib/format';
 import { useAuthStore } from '@/store/authStore';
@@ -75,8 +77,8 @@ export default function ProfileScreen() {
   const user = meQ.data?.user;
   const ov = overviewQ.data;
   const accounts = accountsQ.data ?? [];
-  const connected = accounts.filter((a) => a.connected);
-  const has = (p: 'tiktok' | 'youtube' | 'instagram') => connected.some((a) => a.provider === p);
+  const connected = accounts.filter((a) => a.status === 'active');
+  const has = (p: Platform) => connected.some((a) => a.platform === p);
   const connectedCount = ov?.connected_accounts ?? connected.length;
   const name = user?.name?.trim() || (meQ.isLoading ? '' : 'Guest');
   const initials =
@@ -93,11 +95,11 @@ export default function ProfileScreen() {
   const statsLoading = overviewQ.isLoading;
   const stats = [
     { label: 'Syndicated', value: formatCount(used) },
-    { label: 'Total Views', value: formatCount(ov?.total_views ?? 0), accent: true },
+    { label: 'Total Views', value: formatCount(ov?.totals.views ?? 0), accent: true },
     { label: 'Platforms', value: String(connectedCount), sync: true },
   ] as const;
   const accountNames = connected.length
-    ? connected.map((a) => (a.provider === 'tiktok' ? 'TikTok' : a.provider === 'youtube' ? 'YouTube Shorts' : 'Instagram Reels')).join(', ')
+    ? connected.map((a) => PLATFORM_LABEL[a.platform]).join(', ')
     : 'No accounts linked yet';
 
   // Avatar glow pulse, live-dot ping, meter fill, plan chevron rotation.

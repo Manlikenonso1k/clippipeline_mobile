@@ -20,17 +20,20 @@ export const platformColor: Record<SocialPlatform, string> = {
   tiktok: '#FE2C55',
   youtube: '#FF0000',
   instagram: '#DD2A7B',
+  facebook: '#1877F2',
 };
 
 export const statusColor: Record<DistributionStatus, string> = {
-  pending: colors.warning,
+  queued: colors.warning,
+  uploading: colors.warning,
   processing: colors.warning,
   published: colors.success,
   failed: colors.danger,
 };
 
 export const statusLabel: Record<DistributionStatus, string> = {
-  pending: 'Pending',
+  queued: 'Queued',
+  uploading: 'Uploading',
   processing: 'Processing',
   published: 'Published',
   failed: 'Failed',

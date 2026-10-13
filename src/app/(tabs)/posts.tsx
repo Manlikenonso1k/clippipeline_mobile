@@ -3,15 +3,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Fragment, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { usePosts } from '@/api/hooks';
-import type { Post as ApiPost, Platform } from '@/api/types';
+import { errorText } from '@/api/client';
+import { usePosts, useRetryDistribution } from '@/api/hooks';
+import type { Post as ApiPost, Platform, PostFilter, PostStatus } from '@/api/types';
 import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
-import { captionBody, hashtagsOf, latestAnalytic, postStatus, timeAgo } from '@/components/post-utils';
+import { PLATFORM_SHORT, STATUS_LABEL, captionBody, latestAnalytic, postStatus, postTags, shortDate, timeAgo } from '@/components/post-utils';
+import { useRefresh } from '@/hooks/use-refresh';
 import { formatCount } from '@/lib/format';
 
 // Kinetic Obsidian tokens (see "post page step 6/DESIGN.md")
@@ -41,13 +43,18 @@ const C = {
 } as const;
 
 type MIcon = ComponentProps<typeof MaterialIcons>['name'];
-type Status = 'published' | 'processing' | 'failed';
+type Status = PostStatus;
 type Cell =
   | { kind: 'views'; value: string }
   | { kind: 'progress'; value: string }
   | { kind: 'queued' }
   | { kind: 'none' }
   | { kind: 'failed' };
+
+interface Dest {
+  platform: Platform;
+  cell: Cell;
+}
 
 interface Post {
   id: number;
@@ -57,19 +64,23 @@ interface Post {
   title: string;
   body: string;
   tags: string[];
-  shorts: Cell;
-  reels: Cell;
+  dests: Dest[];
+  failedId?: number;
   retryMessage?: string;
 }
 
-function cellFor(p: ApiPost, platform: Platform): Cell {
-  const d = (p.distributions ?? []).find((x) => x.platform === platform);
-  if (!d) return { kind: 'none' };
+function cellFor(p: ApiPost, d: ApiPost['distributions'][number]): Cell {
   if (d.status === 'failed') return { kind: 'failed' };
-  if (d.status === 'pending') return { kind: 'queued' };
-  if (d.status === 'processing') return { kind: 'progress', value: 'Syncing' };
-  const a = latestAnalytic(p, platform);
+  if (d.status === 'queued') return { kind: 'queued' };
+  if (d.status === 'uploading') return { kind: 'progress', value: 'Uploading' };
+  if (d.status === 'processing') return { kind: 'progress', value: 'Processing' };
+  const a = latestAnalytic(p, d.platform);
   return { kind: 'views', value: a ? formatCount(a.views) : 'Live' };
+}
+
+function metaFor(p: ApiPost): string {
+  if (p.status === 'scheduled' && p.scheduled_at) return `Scheduled ${shortDate(p.scheduled_at)}`;
+  return `${timeAgo(p.published_at ?? p.created_at)} • ${STATUS_LABEL[p.status] ?? 'Processing'}`;
 }
 
 function toCard(p: ApiPost): Post {
@@ -78,42 +89,60 @@ function toCard(p: ApiPost): Post {
     id: p.id,
     status: postStatus(p),
     thumbnail: p.thumbnail ?? null,
-    meta: `${timeAgo(p.published_at)} • Master TikTok`,
+    meta: metaFor(p),
     title: p.title || 'Untitled clip',
     body: captionBody(p.caption),
-    tags: hashtagsOf(p.caption).slice(0, 4),
-    shorts: cellFor(p, 'youtube'),
-    reels: cellFor(p, 'instagram'),
-    retryMessage: failed ? failed.error_message || 'Syndication failed' : undefined,
+    tags: postTags(p).slice(0, 4),
+    dests: (p.distributions ?? []).map((d) => ({ platform: d.platform, cell: cellFor(p, d) })),
+    failedId: failed?.id,
+    retryMessage: failed ? `${PLATFORM_SHORT[failed.platform]}: ${failed.error_message || 'Publishing failed'}` : undefined,
   };
 }
 
-const FILTERS: { key: 'all' | Status; label: string }[] = [
+const FILTERS: { key: PostFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'published', label: 'Published' },
   { key: 'processing', label: 'Processing' },
+  { key: 'scheduled', label: 'Scheduled' },
   { key: 'failed', label: 'Failed' },
 ];
 
+const DEST_STYLE: Record<Platform, { icon: MIcon; color: string; bg?: string; gradient?: boolean }> = {
+  tiktok: { icon: 'music-note', color: C.cyan, bg: C.raised },
+  youtube: { icon: 'ondemand-video', color: C.youtube, bg: 'rgba(255,0,0,0.12)' },
+  instagram: { icon: 'play-circle-outline', color: C.text, gradient: true },
+  facebook: { icon: 'facebook', color: '#1877F2', bg: 'rgba(24,119,242,0.14)' },
+};
+
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
-  const [filter, setFilter] = useState<'all' | Status>('all');
+  const [filter, setFilter] = useState<PostFilter>('all');
   const listQ = usePosts(filter);
   const allQ = usePosts('all');
+  const retryM = useRetryDistribution();
+  const { refreshing, onRefresh } = useRefresh([listQ, allQ]);
   const visible = (listQ.data ?? []).map(toCard);
   const allCards = (allQ.data ?? []).map((p) => postStatus(p));
-  const counts: Record<'all' | Status, number> = {
+  const counts: Record<PostFilter, number> = {
     all: allCards.length,
     published: allCards.filter((x) => x === 'published').length,
     processing: allCards.filter((x) => x === 'processing').length,
+    scheduled: allCards.filter((x) => x === 'scheduled').length,
     failed: allCards.filter((x) => x === 'failed').length,
+  };
+  const retry = (id: number) => {
+    retryM.mutate(id, { onError: (e) => Alert.alert('Retry failed', errorText(e)) });
   };
 
   return (
     <View style={s.root}>
       <StatusBar style="light" />
       <SafeAreaView style={s.flex} edges={['top']}>
-        <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={s.page}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primaryContainer]} />}
+        >
           {/* Header */}
           <View style={s.header}>
             <View style={s.brandRow}>
@@ -172,7 +201,9 @@ export default function PostsScreen() {
                 text={filter === 'all' ? 'No posts yet — new clips will appear here.' : 'No clips in this state yet.'}
               />
             ) : (
-              visible.map((post) => <PostCard key={post.id} post={post} />)
+              visible.map((post) => (
+                <PostCard key={post.id} post={post} onRetry={retry} retrying={retryM.isPending && retryM.variables === post.failedId} />
+              ))
             )}
           </View>
         </ScrollView>
@@ -200,7 +231,7 @@ function FilterChip({ label, count, active, onPress }: { label: string; count: n
   );
 }
 
-function PostCard({ post }: { post: Post }) {
+function PostCard({ post, onRetry, retrying }: { post: Post; onRetry: (distributionId: number) => void; retrying: boolean }) {
   const processing = post.status === 'processing';
 
   return (
@@ -242,19 +273,21 @@ function PostCard({ post }: { post: Post }) {
       </View>
 
       {/* Syndication row */}
-      <View style={s.synd}>
-        <Destination label="TikTok" icon="music-note" iconColor={C.cyan} iconBg={C.raised}>
-          <Pill tone="success" icon={<MaterialIcons name="check-circle" size={12} color={C.success} />} label="Imported" />
-        </Destination>
-        <View style={s.syndDivider} />
-        <Destination label="Shorts" icon="ondemand-video" iconColor={C.youtube} iconBg="rgba(255,0,0,0.12)">
-          <CellStatus cell={post.shorts} />
-        </Destination>
-        <View style={s.syndDivider} />
-        <Destination label="Reels" icon="play-circle-outline" iconColor={C.text} gradient>
-          <CellStatus cell={post.reels} />
-        </Destination>
-      </View>
+      {post.dests.length ? (
+        <View style={s.synd}>
+          {post.dests.map((d, i) => {
+            const st = DEST_STYLE[d.platform];
+            return (
+              <Fragment key={d.platform}>
+                {i > 0 ? <View style={s.syndDivider} /> : null}
+                <Destination label={PLATFORM_SHORT[d.platform]} icon={st.icon} iconColor={st.color} iconBg={st.bg} gradient={st.gradient}>
+                  <CellStatus cell={d.cell} />
+                </Destination>
+              </Fragment>
+            );
+          })}
+        </View>
+      ) : null}
 
       {post.retryMessage ? (
         <View style={s.retry}>
@@ -264,9 +297,15 @@ function PostCard({ post }: { post: Post }) {
               {post.retryMessage}
             </Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Retry" style={({ pressed }) => [s.retryBtn, pressed && s.pressSoft]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retry"
+            disabled={retrying || post.failedId == null}
+            onPress={() => post.failedId != null && onRetry(post.failedId)}
+            style={({ pressed }) => [s.retryBtn, pressed && s.pressSoft]}
+          >
             <MaterialIcons name="refresh" size={14} color={C.danger} />
-            <Text style={s.retryBtnText}>Retry</Text>
+            <Text style={s.retryBtnText}>{retrying ? 'Retrying…' : 'Retry'}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -276,7 +315,7 @@ function PostCard({ post }: { post: Post }) {
 
 function Thumbnail({ post }: { post: Post }) {
   const processing = post.status === 'processing';
-  const failed = post.status === 'failed';
+  const failed = post.status === 'failed' || post.status === 'partial';
   const published = post.status === 'published';
 
   return (
@@ -452,7 +491,7 @@ function NewCrossPostFab({ bottomOffset }: { bottomOffset: number }) {
   return (
     <View style={[s.fabWrap, { bottom: bottomOffset }]}>
       <Animated.View style={[s.fabGlow, glowStyle]} />
-      <AnimatedPressable accessibilityRole="button" style={s.fab}>
+      <AnimatedPressable accessibilityRole="button" accessibilityLabel="New cross-post" style={s.fab} onPress={() => router.push('/post/new')}>
         <LinearGradient colors={[C.violet, C.violetEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[StyleSheet.absoluteFill, s.fabFill]} />
         <MaterialIcons name="add" size={20} color={C.text} />
         <Text style={s.fabText}>New cross-post</Text>

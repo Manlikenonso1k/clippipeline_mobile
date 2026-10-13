@@ -1,19 +1,47 @@
-import type { Platform, Post, PostAnalytic } from '@/api/types';
+import type { DistributionStatus, Metrics, Platform, Post, PostAnalytic, PostStatus } from '@/api/types';
 
-export type PostStatus = 'published' | 'processing' | 'failed';
+export type { PostStatus };
 
 export const PLATFORM_LABEL: Record<Platform, string> = {
   tiktok: 'TikTok',
   youtube: 'YouTube Shorts',
   instagram: 'Instagram Reels',
+  facebook: 'Facebook Reels',
 };
 
+export const PLATFORM_SHORT: Record<Platform, string> = {
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+};
+
+export const PLATFORM_COLOR: Record<Platform, string> = {
+  tiktok: '#00F2EA',
+  youtube: '#FF0000',
+  instagram: '#DD2A7B',
+  facebook: '#1877F2',
+};
+
+export const STATUS_LABEL: Record<PostStatus, string> = {
+  scheduled: 'Scheduled',
+  processing: 'Processing',
+  published: 'Published',
+  partial: 'Partial',
+  failed: 'Failed',
+};
+
+export const DIST_LABEL: Record<DistributionStatus, string> = {
+  queued: 'Queued',
+  uploading: 'Uploading',
+  processing: 'Processing',
+  published: 'Published',
+  failed: 'Failed',
+};
+
+/** Server-derived status (CONTRACT §1). */
 export function postStatus(p: Post): PostStatus {
-  const d = p.distributions ?? [];
-  if (d.some((x) => x.status === 'failed')) return 'failed';
-  if (d.some((x) => x.status === 'pending' || x.status === 'processing')) return 'processing';
-  if (!p.published_at && d.length === 0) return 'processing';
-  return 'published';
+  return p.status ?? 'processing';
 }
 
 /** Latest analytics snapshot for a platform. */
@@ -23,18 +51,37 @@ export function latestAnalytic(p: Post, platform: Platform): PostAnalytic | unde
   return rows.reduce((a, b) => (new Date(b.recorded_at).getTime() >= new Date(a.recorded_at).getTime() ? b : a));
 }
 
+/** Post totals (server `totals`), with `watch` = watch_time_seconds. */
 export function totalsFor(p: Post) {
-  const out = { views: 0, likes: 0, comments: 0, shares: 0, watch: 0 };
-  (['tiktok', 'youtube', 'instagram'] as Platform[]).forEach((pl) => {
-    const a = latestAnalytic(p, pl);
-    if (!a) return;
-    out.views += a.views ?? 0;
-    out.likes += a.likes ?? 0;
-    out.comments += a.comments ?? 0;
-    out.shares += a.shares ?? 0;
-    out.watch += a.watch_time ?? 0;
-  });
-  return out;
+  return metricsShort(p.totals);
+}
+
+export function metricsShort(t: Metrics | undefined | null) {
+  return {
+    views: t?.views ?? 0,
+    likes: t?.likes ?? 0,
+    comments: t?.comments ?? 0,
+    shares: t?.shares ?? 0,
+    saves: t?.saves ?? 0,
+    watch: t?.watch_time_seconds ?? 0,
+  };
+}
+
+/** Hashtags for display, with '#'. Falls back to tags inside the caption. */
+export function postTags(p: Post): string[] {
+  if (p.hashtags?.length) return p.hashtags.map((h) => `#${h.replace(/^#/, '')}`);
+  return hashtagsOf(p.caption);
+}
+
+/** Human-readable privacy note for unaudited apps (YouTube private, TikTok SELF_ONLY). */
+export function privacyNote(privacy: string | null | undefined): string | null {
+  if (!privacy) return null;
+  const v = privacy.toUpperCase();
+  if (v === 'PRIVATE') return 'Published as private (app pending platform audit).';
+  if (v === 'SELF_ONLY') return 'Visible only to you on TikTok (app pending audit).';
+  if (v === 'UNLISTED') return 'Published as unlisted.';
+  if (v === 'PUBLIC' || v === 'PUBLIC_TO_EVERYONE') return null;
+  return `Privacy: ${privacy}`;
 }
 
 export function timeAgo(iso: string | null | undefined): string {

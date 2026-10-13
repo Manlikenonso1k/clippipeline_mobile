@@ -1,11 +1,16 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Linking from 'expo-linking';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { usePosts, useSocialAccounts } from '@/api/hooks';
-import type { Platform } from '@/api/types';
+import * as WebBrowser from 'expo-web-browser';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { errorText } from '@/api/client';
+import { useConnectStart, useDeleteAccount, useIsGuest, useSocialAccounts } from '@/api/hooks';
+import type { ConnectProvider, Platform, SocialAccount } from '@/api/types';
 import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { useRefresh } from '@/hooks/use-refresh';
 import { formatCount, formatDate } from '@/lib/format';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
@@ -35,6 +40,7 @@ const C = {
   igEnd: '#8134AF',
   metaViolet: '#7C5CFF',
   metaPurple: '#B14CFF',
+  danger: '#EA5455',
 } as const;
 
 const PIPELINE_RULES = [
@@ -43,45 +49,151 @@ const PIPELINE_RULES = [
   { icon: 'lock', color: C.warning, label: 'Credential Protocol', value: 'OAuth 2.0 Encrypted', valueColor: C.muted },
 ] as const;
 
-type IgState = 'idle' | 'authenticating' | 'connected';
+type BtnState = 'idle' | 'authenticating' | 'connected';
+type RowState = 'connected' | 'needs_reauth' | 'not_connected';
+type Notice = { tone: 'ok' | 'error'; text: string } | null;
+
+const PROVIDERS: {
+  provider: ConnectProvider;
+  name: string;
+  platforms: Platform[];
+  tag: string;
+  blurb: string;
+  accent: string;
+}[] = [
+  { provider: 'youtube', name: 'YouTube', platforms: ['youtube'], tag: 'GOOGLE • SHORTS', blurb: 'Publish vertical clips as YouTube Shorts.', accent: C.youtube },
+  {
+    provider: 'meta',
+    name: 'Meta',
+    platforms: ['facebook', 'instagram'],
+    tag: 'FACEBOOK PAGE + INSTAGRAM',
+    blurb: 'Connect a Facebook Page with a linked Instagram Business/Creator account to publish Reels.',
+    accent: C.igMid,
+  },
+  { provider: 'tiktok', name: 'TikTok', platforms: ['tiktok'], tag: 'TIKTOK', blurb: 'Publish directly to your TikTok profile.', accent: C.cyan },
+];
+
+const ROW_NAME: Record<Platform, string> = { youtube: 'YouTube', facebook: 'Facebook Page', instagram: 'Instagram', tiktok: 'TikTok' };
+const ROW_COLOR: Record<Platform, string> = { youtube: C.youtube, facebook: '#1877F2', instagram: C.igMid, tiktok: C.cyan };
+const PROVIDER_NAME: Record<string, string> = { youtube: 'YouTube', meta: 'Meta', tiktok: 'TikTok' };
+const REDIRECT = 'clippipelinemobile://connect';
+
+function rowState(a: SocialAccount | undefined): RowState {
+  if (!a) return 'not_connected';
+  return a.status === 'active' ? 'connected' : 'needs_reauth';
+}
+
+type ConnectResult = { provider?: string; status?: string; message?: string };
+
+/** Reads provider/status/message from clippipelinemobile://connect?... */
+function parseConnectUrl(url: string): ConnectResult {
+  try {
+    const q = Linking.parse(url).queryParams ?? {};
+    const pick = (k: string) => {
+      const v = q[k];
+      return typeof v === 'string' ? v : Array.isArray(v) ? v[0] : undefined;
+    };
+    return { provider: pick('provider'), status: pick('status'), message: pick('message') };
+  } catch {
+    return {};
+  }
+}
+
+function resultNotice(r: ConnectResult): Notice {
+  const name = PROVIDER_NAME[r.provider ?? ''] ?? 'Account';
+  if (r.status === 'ok') return { tone: 'ok', text: `${name} connected.` };
+  if (r.status === 'error') {
+    let msg = r.message;
+    try {
+      msg = msg ? decodeURIComponent(msg.replace(/\+/g, ' ')) : msg;
+    } catch {
+      // keep raw
+    }
+    return { tone: 'error', text: msg || `${name} connection failed.` };
+  }
+  return null;
+}
 
 export default function ConnectScreen() {
+  const guest = useIsGuest();
   const accountsQ = useSocialAccounts();
-  const postsQ = usePosts('all');
-  const [autoFetch, setAutoFetch] = useState(true);
-  const [pending, setPending] = useState<Platform | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startM = useConnectStart();
+  const deleteM = useDeleteAccount();
+  const { refreshing, onRefresh } = useRefresh([accountsQ]);
+  const [pending, setPending] = useState<ConnectProvider | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
+  const params = useLocalSearchParams<{ provider?: string; status?: string; message?: string }>();
+  const handledLink = useRef<string | null>(null);
+  const refetchAccounts = accountsQ.refetch;
 
-  useEffect(() => {
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, []);
-
-  const accounts = accountsQ.data ?? [];
-  const acct = (p: Platform) => accounts.find((a) => a.provider === p);
-  const isOn = (p: Platform) => !!acct(p)?.connected;
-  const tt = acct('tiktok');
-  const yt = acct('youtube');
-  const ig = acct('instagram');
-  const ttOn = isOn('tiktok');
-  const ytOn = isOn('youtube');
-  const igOn = isOn('instagram');
-  const handleOf = (h: string | null | undefined) => (h ? `@${h.replace(/^@/, '')}` : '');
-  const linkedCount = (['tiktok', 'youtube', 'instagram'] as Platform[]).filter(isOn).length;
-  const clipCount = postsQ.data?.length ?? 0;
+  const accounts = useMemo(() => accountsQ.data ?? [], [accountsQ.data]);
+  const acct = (p: Platform) => accounts.find((a) => a.platform === p);
   const loading = accountsQ.isLoading;
+  const linkedCount = PROVIDERS.filter((pv) => pv.platforms.some((p) => rowState(acct(p)) === 'connected')).length;
+  const reauthCount = accounts.filter((a) => a.status !== 'active').length;
 
-  // OAuth for each platform happens server-side; here we only show a brief authenticating state and
-  // then re-read the real connection status from the API.
-  function connect(p: Platform) {
+  // The OAuth redirect can also arrive as a deep link: Expo Router opens /connect?provider=&status=&message=.
+  useEffect(() => {
+    if (!params.status) return;
+    const key = `${params.provider}|${params.status}|${params.message ?? ''}`;
+    if (handledLink.current === key) return;
+    handledLink.current = key;
+    setNotice(resultNotice({ provider: params.provider, status: params.status, message: params.message }));
+    setPending(null);
+    void refetchAccounts();
+    router.setParams({ provider: undefined, status: undefined, message: undefined });
+  }, [params.provider, params.status, params.message, refetchAccounts]);
+
+  async function connect(provider: ConnectProvider) {
     if (pending) return;
-    setPending(p);
-    timer.current = setTimeout(() => {
-      accountsQ.refetch().finally(() => setPending(null));
-    }, 1200);
+    if (guest) {
+      Alert.alert('Sign in required', 'Sign in to connect your own accounts.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign in', onPress: () => router.push('/login') },
+      ]);
+      return;
+    }
+    setNotice(null);
+    setPending(provider);
+    try {
+      const { auth_url } = await startM.mutateAsync(provider);
+      const result = await WebBrowser.openAuthSessionAsync(auth_url, REDIRECT);
+      if (result.type === 'success' && result.url) {
+        handledLink.current = null;
+        setNotice(resultNotice(parseConnectUrl(result.url)));
+      }
+      // Cancelled / dismissed (or the link arrived via Linking): always re-read the real status.
+      await refetchAccounts();
+    } catch (e) {
+      setNotice({ tone: 'error', text: errorText(e) });
+    } finally {
+      setPending(null);
+    }
   }
-  const stateFor = (p: Platform): IgState => (pending === p ? 'authenticating' : isOn(p) ? 'connected' : 'idle');
+
+  function disconnect(a: SocialAccount) {
+    if (guest) return;
+    const meta = a.connect_provider === 'meta';
+    const name = meta ? 'Meta' : ROW_NAME[a.platform];
+    Alert.alert(
+      `Disconnect ${name}?`,
+      meta
+        ? 'Facebook and Instagram share one Meta login, so both will be disconnected.'
+        : 'ClipPipeline will stop publishing to this account.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: () =>
+            deleteM.mutate(a.id, {
+              onSuccess: () => setNotice({ tone: 'ok', text: `${name} disconnected.` }),
+              onError: (e) => setNotice({ tone: 'error', text: errorText(e) }),
+            }),
+        },
+      ],
+    );
+  }
 
   return (
     <SafeAreaView style={s.safe}>
@@ -93,201 +205,159 @@ export default function ConnectScreen() {
           <View style={s.brandTile}>
             <MaterialIcons name="videocam" size={20} color={C.text} />
           </View>
-          <Text style={s.brandTitle}>Home</Text>
+          <Text style={s.brandTitle}>Connect</Text>
         </View>
         <View style={s.topActions}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Notifications" style={s.bellBtn}>
-            <MaterialIcons name="notifications" size={22} color={C.muted} />
-          </Pressable>
           <View style={s.avatar}>
             <MaterialIcons name="person" size={18} color={C.onPrimary} />
           </View>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={s.page}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primaryContainer]} />}
+      >
         {/* Heading */}
         <View style={s.heading}>
           <Text style={s.title}>Social Channels</Text>
-          <Text style={s.subtitle}>Connect TikTok to import clips, then connect YouTube & Instagram to auto-syndicate.</Text>
+          <Text style={s.subtitle}>Connect YouTube, Meta (Facebook + Instagram) and TikTok, then publish one upload everywhere.</Text>
         </View>
 
-        {/* Live sync status pill */}
+        {/* Live status pill */}
         <View style={s.syncPill}>
           <View style={s.syncLeft}>
-            <PulseDot color={C.success} />
+            <PulseDot color={reauthCount ? C.warning : linkedCount ? C.success : C.muted} />
             <Text style={s.syncCount} numberOfLines={1}>
               {loading ? '– of 3' : `${linkedCount} of 3`} Connected
             </Text>
-            <Text style={s.syncSep}>•</Text>
-            <Text style={s.syncSub} numberOfLines={1}>
-              Auto-sync active
-            </Text>
+            {reauthCount ? (
+              <>
+                <Text style={s.syncSep}>•</Text>
+                <Text style={[s.syncSub, { color: C.warning }]} numberOfLines={1}>
+                  {reauthCount} need{reauthCount === 1 ? 's' : ''} re-auth
+                </Text>
+              </>
+            ) : null}
           </View>
-          <View style={s.velocity}>
-            <MaterialIcons name="bolt" size={16} color={C.primary} />
-            <Text style={s.velocityText}>High Velocity</Text>
-          </View>
+          {guest ? (
+            <View style={s.velocity}>
+              <MaterialIcons name="visibility" size={16} color={C.primary} />
+              <Text style={s.velocityText}>Preview</Text>
+            </View>
+          ) : null}
         </View>
 
-        {accountsQ.isError && !accountsQ.data ? (
-          <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" />
+        {notice ? (
+          <InlineMessage
+            tone={notice.tone === 'error' ? 'danger' : 'muted'}
+            icon={notice.tone === 'error' ? 'error-outline' : 'check-circle'}
+            text={notice.text}
+          />
         ) : null}
+        {accountsQ.isError && !accountsQ.data ? <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load your accounts. Pull to retry." /> : null}
         {loading ? <Skeleton height={14} width="60%" /> : null}
         {!loading && !accountsQ.isError && accounts.length === 0 ? (
-          <InlineMessage icon="link-off" text="No accounts linked yet. Connect TikTok to get started." />
+          <InlineMessage icon="link-off" text="No accounts linked yet. Connect a channel to start publishing." />
         ) : null}
 
         <View style={s.stack}>
-          {/* 1. TikTok: mandatory source */}
-          <View style={[s.card, { borderColor: `${C.cyan}40` }]}>
-            <View style={s.cardGlow} pointerEvents="none" />
-            <LinearGradient
-              colors={[C.cyan, C.tiktokRed, C.primaryContainer]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={s.topAccent}
-            />
+          {PROVIDERS.map((pv) => {
+            const rows = pv.platforms.map((p) => ({ platform: p, account: acct(p), state: rowState(acct(p)) }));
+            const anyRow = rows.some((r) => r.account);
+            const allOn = rows.every((r) => r.state === 'connected');
+            const needsAuth = rows.some((r) => r.state === 'needs_reauth');
+            const busy = pending === pv.provider;
+            const first = rows.find((r) => r.account)?.account;
+            return (
+              <View key={pv.provider} style={[s.card, s.cardFlat, { borderColor: `${pv.accent}40` }]}>
+                <RowWrap>
+                  <Tag icon="call-split" label={pv.tag} color={C.muted} bg={C.containerHigh} />
+                  <StatusPill
+                    label={allOn ? 'Connected' : needsAuth ? 'Needs re-auth' : 'Not connected'}
+                    color={allOn ? C.success : needsAuth ? C.warning : C.muted}
+                  />
+                </RowWrap>
 
-            <RowWrap>
-              <Tag icon="input" label="SOURCE ACCOUNT • REQUIRED" color={C.cyan} bg={`${C.cyan}26`} />
-              <View style={s.rowEnd}>
-                <StatusPill label={ttOn ? 'Connected' : 'Unlinked'} color={ttOn ? C.success : C.muted} />
-                <MenuButton label="TikTok settings" />
-              </View>
-            </RowWrap>
-
-            <View style={s.identity}>
-              <View style={[s.platformTile, { borderColor: `${C.cyan}66` }]}>
-                <FontAwesome5 name="tiktok" size={22} color={C.cyan} />
-              </View>
-              <View style={s.identityCopy}>
-                <View style={s.nameRow}>
-                  <Text style={s.platformName}>TikTok</Text>
-                  <MaterialIcons name="verified" size={16} color={C.cyan} />
+                <View style={s.identity}>
+                  {pv.provider === 'meta' ? (
+                    <LinearGradient
+                      colors={[C.igStart, C.igMid, C.igEnd]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[s.platformTile, s.tileGradient]}
+                    >
+                      <FontAwesome5 name="facebook" size={22} color={C.text} />
+                    </LinearGradient>
+                  ) : (
+                    <View style={[s.platformTile, { borderColor: `${pv.accent}66` }]}>
+                      <FontAwesome5 name={pv.provider} size={22} color={pv.accent} />
+                    </View>
+                  )}
+                  <View style={s.identityCopy}>
+                    <Text style={s.platformName}>{pv.name}</Text>
+                    <Text style={s.meta}>{pv.blurb}</Text>
+                  </View>
                 </View>
-                <Text style={s.handle}>{ttOn && tt?.handle ? handleOf(tt.handle) : 'Not connected'}</Text>
-                <Text style={s.meta} numberOfLines={1}>
-                  {ttOn ? `${formatCount(tt?.follower_count ?? 0)} followers • Clip Source (Auto-import)` : 'Required to import your master clips'}
-                </Text>
-              </View>
-            </View>
 
-            <View style={s.inset}>
-              <MaterialIcons name="history" size={18} color={C.cyan} />
-              <View style={s.insetCopy}>
-                <Text style={s.insetTitle}>
-                  {ttOn ? (tt?.expires_at ? `Token valid until ${formatDate(tt.expires_at)}` : 'Source active') : 'Waiting for connection'}
-                </Text>
-                <Text style={s.insetSub}>{clipCount} master {clipCount === 1 ? 'clip' : 'clips'} cataloged</Text>
-              </View>
-              <View style={s.toggleWrap}>
-                <Text style={s.toggleLabel}>Auto-Fetch</Text>
-                <Switch
-                  value={autoFetch}
-                  onValueChange={setAutoFetch}
-                  trackColor={{ false: C.containerHighest, true: C.primaryContainer }}
-                  thumbColor={C.text}
-                  ios_backgroundColor={C.containerHighest}
-                  accessibilityLabel="Auto-Fetch"
-                />
-              </View>
-            </View>
-            {!ttOn && !loading ? (
-              <ConnectButton state={stateFor('tiktok')} onPress={() => connect('tiktok')} label="TikTok" />
-            ) : null}
-          </View>
+                {rows.map(({ platform, account, state }) => (
+                  <View key={platform} style={s.inset}>
+                    <FontAwesome5 name={platform} size={16} color={ROW_COLOR[platform]} />
+                    <View style={s.insetCopy}>
+                      <Text style={s.insetTitle} numberOfLines={1}>
+                        {ROW_NAME[platform]}
+                        {account && (account.handle || account.display_name) ? ` • ${account.handle ?? account.display_name}` : ''}
+                      </Text>
+                      <Text style={[s.insetSub, state === 'needs_reauth' && { color: C.warning }]} numberOfLines={3}>
+                        {state === 'connected'
+                          ? `${formatCount(account?.follower_count ?? 0)} followers${account?.last_synced_at ? ` • synced ${formatDate(account.last_synced_at)}` : ''}`
+                          : state === 'needs_reauth'
+                            ? account?.error || 'Authorization expired — reconnect to keep publishing.'
+                            : 'Not connected'}
+                      </Text>
+                    </View>
+                    <StatusPill
+                      label={state === 'connected' ? 'Active' : state === 'needs_reauth' ? 'Re-auth' : 'Off'}
+                      color={state === 'connected' ? C.success : state === 'needs_reauth' ? C.warning : C.muted}
+                    />
+                  </View>
+                ))}
 
-          {/* 2. YouTube: connected target */}
-          <View style={[s.card, s.cardFlat, { borderColor: `${C.youtube}40` }]}>
-            <RowWrap>
-              <Tag icon="call-split" label="TARGET DESTINATION" color={C.muted} bg={C.containerHigh} />
-              <View style={s.rowEnd}>
-                <StatusPill label={ytOn ? 'Connected' : 'Unlinked'} color={ytOn ? C.success : C.muted} />
-                <MenuButton label="YouTube settings" />
+                {loading ? null : allOn ? (
+                  <View style={s.bannerRow}>
+                    <AnimatedPressable accessibilityRole="button" style={s.linkBtn} onPress={() => connect(pv.provider)} disabled={busy}>
+                      <Text style={s.linkText}>{busy ? 'Opening…' : 'Reconnect'}</Text>
+                    </AnimatedPressable>
+                    <View style={s.flexFill} />
+                    {first && !guest ? (
+                      <AnimatedPressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Disconnect ${pv.name}`}
+                        style={s.linkBtn}
+                        onPress={() => disconnect(first)}
+                      >
+                        <Text style={[s.linkText, { color: C.danger }]}>Disconnect</Text>
+                      </AnimatedPressable>
+                    ) : null}
+                  </View>
+                ) : (
+                  <>
+                    <ConnectButton
+                      state={busy ? 'authenticating' : 'idle'}
+                      onPress={() => connect(pv.provider)}
+                      label={anyRow ? `Reconnect ${pv.name}` : `Connect ${pv.name}`}
+                    />
+                    {first && !guest ? (
+                      <AnimatedPressable accessibilityRole="button" style={[s.linkBtn, s.center]} onPress={() => disconnect(first)}>
+                        <Text style={[s.linkText, { color: C.danger }]}>Disconnect</Text>
+                      </AnimatedPressable>
+                    ) : null}
+                  </>
+                )}
               </View>
-            </RowWrap>
-
-            <View style={s.identity}>
-              <View style={[s.platformTile, s.tileDark]}>
-                <FontAwesome5 name="youtube" size={22} color={C.youtube} />
-              </View>
-              <View style={s.identityCopy}>
-                <View style={s.nameRow}>
-                  <Text style={s.platformName}>YouTube</Text>
-                  <FontAwesome5 name="youtube" size={13} color={C.youtube} />
-                </View>
-                <Text style={s.channelLine} numberOfLines={1}>
-                  {ytOn && yt?.handle ? handleOf(yt.handle) : 'Not connected'}
-                </Text>
-                <Text style={s.meta} numberOfLines={1}>
-                  {ytOn ? `${formatCount(yt?.follower_count ?? 0)} subscribers • Publishes as Shorts` : 'Connect a channel to publish Shorts'}
-                </Text>
-              </View>
-            </View>
-
-            {ytOn ? (
-              <View style={s.inset}>
-                <MaterialIcons name="check-circle" size={18} color={C.success} />
-                <View style={s.insetCopy}>
-                  <Text style={s.insetTitle}>Syndication Active</Text>
-                  <Text style={s.insetSub}>{yt?.expires_at ? `Token valid until ${formatDate(yt.expires_at)}` : 'Publishing as Shorts'}</Text>
-                </View>
-                <AnimatedPressable accessibilityRole="button" style={s.linkBtn} onPress={() => connect('youtube')}>
-                  <Text style={s.linkText}>Re-auth</Text>
-                </AnimatedPressable>
-              </View>
-            ) : (
-              <View style={s.banner}>
-                <View style={s.bannerRow}>
-                  <MaterialIcons name="info" size={16} color={C.warning} />
-                  <Text style={s.bannerText}>Google authorization required</Text>
-                </View>
-                {!loading ? <ConnectButton state={stateFor('youtube')} onPress={() => connect('youtube')} label="YouTube" /> : null}
-              </View>
-            )}
-          </View>
-
-          {/* 3. Instagram: unlinked target */}
-          <View style={[s.card, s.cardFlat, { borderColor: `${C.igMid}40` }]}>
-            <RowWrap>
-              <Tag icon="call-split" label="TARGET DESTINATION" color={C.muted} bg={C.containerHigh} />
-              <View style={s.rowEnd}>
-                <View style={s.unlinkedPill}>
-                  <View style={s.unlinkedDot} />
-                  <Text style={s.unlinkedText}>{igOn ? 'Connected' : 'Unlinked'}</Text>
-                </View>
-              </View>
-            </RowWrap>
-
-            <View style={s.identity}>
-              <LinearGradient
-                colors={[C.igStart, C.igMid, C.igEnd]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[s.platformTile, s.tileGradient]}
-              >
-                <FontAwesome5 name="instagram" size={24} color={C.text} />
-              </LinearGradient>
-              <View style={s.identityCopy}>
-                <Text style={s.platformName}>Instagram</Text>
-                <Text style={s.igSub}>{igOn && ig?.handle ? handleOf(ig.handle) : 'Publishes as Instagram Reels'}</Text>
-                <Text style={s.meta}>
-                  {igOn
-                    ? `${formatCount(ig?.follower_count ?? 0)} followers • Publishes as Reels`
-                    : 'Connect Creator or Business account to enable 9:16 Reels cross-posting.'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={s.banner}>
-              <View style={s.bannerRow}>
-                <MaterialIcons name={igOn ? 'check-circle' : 'info'} size={16} color={igOn ? C.success : C.warning} />
-                <Text style={s.bannerText}>{igOn ? 'Reels syndication active' : 'Meta Graph API token authorization required'}</Text>
-              </View>
-              {!loading ? <ConnectButton state={stateFor('instagram')} onPress={() => connect('instagram')} label="Instagram" handle={igOn ? handleOf(ig?.handle) : ''} /> : null}
-            </View>
-          </View>
+            );
+          })}
         </View>
 
         {/* Pipeline engine rules */}
@@ -312,7 +382,6 @@ export default function ConnectScreen() {
           ))}
         </View>
       </ScrollView>
-
     </SafeAreaView>
   );
 }
@@ -341,7 +410,7 @@ function PulseDot({ color, size = 10 }: { color: string; size?: number }) {
 }
 
 // Connect button: primary gradient with a breathing glow. Turns into a status chip once connected.
-function ConnectButton({ state, onPress, label, handle }: { state: IgState; onPress: () => void; label: string; handle?: string }) {
+function ConnectButton({ state, onPress, label, handle }: { state: BtnState; onPress: () => void; label: string; handle?: string }) {
   const glow = useSharedValue(0.35);
 
   useEffect(() => {
@@ -387,7 +456,7 @@ function ConnectButton({ state, onPress, label, handle }: { state: IgState; onPr
         ) : (
           <>
             <MaterialIcons name="add-link" size={20} color={C.text} />
-            <Text style={s.connectText}>{`+ Connect ${label}`}</Text>
+            <Text style={s.connectText}>{`+ ${label}`}</Text>
           </>
         )}
       </AnimatedPressable>
@@ -417,20 +486,14 @@ function StatusPill({ label, color }: { label: string; color: string }) {
   );
 }
 
-function MenuButton({ label }: { label: string }) {
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [s.menuBtn, pressed && s.pressed]}>
-      <MaterialIcons name="more-vert" size={18} color={C.muted} />
-    </Pressable>
-  );
-}
-
 /* ---------- Styles ---------- */
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   page: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24, gap: 20 },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  flexFill: { flex: 1 },
+  center: { alignSelf: 'center' },
 
   topBar: { height: 60, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: `${C.surface}E6` },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

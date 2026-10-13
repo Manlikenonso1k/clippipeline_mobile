@@ -3,11 +3,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
-import { useOverview, usePosts } from '@/api/hooks';
+import { useIsGuest, useOverview, usePlatformAnalytics, useTimeseries, useTopPosts } from '@/api/hooks';
+import type { Metrics, Period, Platform as ApiPlatform } from '@/api/types';
 import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
-import { buildChart, latestAnalytic, shortDate, totalsFor, trendDelta } from '@/components/post-utils';
+import { PLATFORM_COLOR, buildChart, metricsShort, shortDate } from '@/components/post-utils';
+import { useRefresh } from '@/hooks/use-refresh';
 import { formatCount, formatWatchTime } from '@/lib/format';
 import Animated, {
   Easing,
@@ -52,11 +54,12 @@ const CURVE_LEN = 390;
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 const SPARKS = {
-  views: { color: C.primary, fill: C.primaryContainer, d: 'M0 24 L 20 18 L 40 22 L 60 12 L 80 15 L 100 4' },
-  likes: { color: C.tiktokRed, fill: C.tiktokRed, d: 'M0 22 L 20 20 L 40 14 L 60 18 L 80 8 L 100 6' },
-  comments: { color: C.warning, fill: C.warning, d: 'M0 26 L 25 21 L 50 16 L 75 19 L 100 5' },
-  shares: { color: C.success, fill: C.success, d: 'M0 25 L 20 22 L 45 10 L 70 14 L 100 3' },
+  views: { color: C.primary, fill: C.primaryContainer },
+  likes: { color: C.tiktokRed, fill: C.tiktokRed },
+  comments: { color: C.warning, fill: C.warning },
+  shares: { color: C.success, fill: C.success },
 } as const;
+const SPARK_FLAT = 'M0 26 L 100 26';
 
 const KPI_DEFS = [
   { key: 'views', icon: 'visibility', tint: C.primary, label: 'Total Views' },
@@ -65,14 +68,24 @@ const KPI_DEFS = [
   { key: 'shares', icon: 'share', tint: C.success, label: 'Shares' },
 ] as const;
 
-const PERIODS = [
+const PERIODS: { label: string; api: Period; days: string }[] = [
   { label: 'Last 30 Days', api: '30d', days: '30-Day' },
   { label: 'Last 7 Days', api: '7d', days: '7-Day' },
-  { label: 'This Quarter (Q4)', api: '90d', days: '90-Day' },
-] as const;
+  { label: 'Last 90 Days', api: '90d', days: '90-Day' },
+];
 
-const PLATFORMS = ['All Platforms', 'TikTok', 'YouTube', 'Instagram'] as const;
+const PLATFORMS = ['All Platforms', 'YouTube', 'Facebook', 'Instagram', 'TikTok'] as const;
 type Platform = (typeof PLATFORMS)[number];
+const CHIP_API: Record<Platform, ApiPlatform | 'all'> = {
+  'All Platforms': 'all',
+  YouTube: 'youtube',
+  Facebook: 'facebook',
+  Instagram: 'instagram',
+  TikTok: 'tiktok',
+};
+type Kind = 'tt' | 'yt' | 'ig' | 'fb';
+const KIND_API: Record<Kind, ApiPlatform> = { tt: 'tiktok', yt: 'youtube', ig: 'instagram', fb: 'facebook' };
+const ZERO: Metrics = { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, watch_time_seconds: 0 };
 
 // ---- Small animated pieces ----
 const SPARK_LEN = 130;
@@ -100,9 +113,9 @@ function Spark({ d, color, fill, progress }: { d: string; color: string; fill: s
   );
 }
 
-function PlatformDot({ kind }: { kind: 'tt' | 'yt' | 'ig' }) {
+function PlatformDot({ kind }: { kind: Kind }) {
   if (kind === 'ig') return <LinearGradient colors={[C.igStart, C.igMid] as const} style={s.dot} />;
-  return <View style={[s.dot, { backgroundColor: kind === 'tt' ? C.cyan : C.youtube }]} />;
+  return <View style={[s.dot, { backgroundColor: PLATFORM_COLOR[KIND_API[kind]] }]} />;
 }
 
 export default function Insights() {
@@ -111,31 +124,36 @@ export default function Insights() {
   const [period, setPeriod] = useState<string>('Last 30 Days');
   const periodDef = PERIODS.find((p) => p.label === period) ?? PERIODS[0];
 
+  const guest = useIsGuest();
+  const apiPlatform = CHIP_API[platform];
   const overviewQ = useOverview(periodDef.api);
-  const postsQ = usePosts('all');
+  const platformsQ = usePlatformAnalytics(periodDef.api);
+  const seriesQ = useTimeseries(periodDef.api, apiPlatform);
+  const topQ = useTopPosts(periodDef.api, 3);
+  const { refreshing, onRefresh } = useRefresh([overviewQ, platformsQ, seriesQ, topQ]);
   const ov = overviewQ.data;
   const ovLoading = overviewQ.isLoading;
-  const posts = useMemo(() => postsQ.data ?? [], [postsQ.data]);
+  const breakdown = useMemo(() => platformsQ.data?.platforms ?? [], [platformsQ.data?.platforms]);
+  const selectedRow = apiPlatform === 'all' ? undefined : breakdown.find((b) => b.platform === apiPlatform);
+  // KPI source: overview for "All", the platform row otherwise. Real data only (zeros when empty).
+  const totals: Metrics = (apiPlatform === 'all' ? ov?.totals : selectedRow?.totals) ?? ZERO;
+  const change = apiPlatform === 'all' ? ov?.change : selectedRow?.change;
+  const kpiLoading = apiPlatform === 'all' ? ovLoading : platformsQ.isLoading;
 
-  const trend = useMemo(() => ov?.trend ?? [], [ov?.trend]);
+  const trend = useMemo(() => seriesQ.data?.points ?? [], [seriesQ.data?.points]);
   const series = useMemo(() => trend.map((x) => x.views ?? 0), [trend]);
+  const hasSeries = series.some((v) => v > 0);
 
-  // Platform split from per-post analytics.
+  // Platform split from the /analytics/platforms breakdown.
   const split = useMemo(() => {
-    const out = { tt: 0, yt: 0, ig: 0 };
-    let watch = 0;
-    posts.forEach((p) => {
-      out.tt += latestAnalytic(p, 'tiktok')?.views ?? 0;
-      out.yt += latestAnalytic(p, 'youtube')?.views ?? 0;
-      out.ig += latestAnalytic(p, 'instagram')?.views ?? 0;
-      watch += totalsFor(p).watch;
-    });
-    return { ...out, total: out.tt + out.yt + out.ig, watch };
-  }, [posts]);
+    const v = (pl: ApiPlatform) => breakdown.find((b) => b.platform === pl)?.totals.views ?? 0;
+    const out = { tt: v('tiktok'), yt: v('youtube'), ig: v('instagram'), fb: v('facebook') };
+    return { ...out, total: out.tt + out.yt + out.ig + out.fb };
+  }, [breakdown]);
   const pct = (n: number) => (split.total > 0 ? Math.round((n / split.total) * 100) : 0);
 
-  const primary = useMemo(() => buildChart(series, { top: 14, bottom: 140 }), [series]);
-  const ttShare = split.total > 0 ? split.tt / split.total : 0;
+  const primary = useMemo(() => (hasSeries ? buildChart(series, { top: 14, bottom: 140 }) : null), [series, hasSeries]);
+  const ttShare = apiPlatform === 'all' && split.total > 0 && split.tt < split.total ? split.tt / split.total : 0;
   // Secondary curve is scaled to the same max so it sits under the primary line.
   const primaryD = primary?.d ?? FLAT_D;
   const primaryAreaD = `${primaryD} L 340 150 L 0 150 Z`;
@@ -163,24 +181,21 @@ export default function Insights() {
     });
     return best;
   }, [primary, axisLabels]);
-  const delta = trendDelta(trend);
+  const delta = change?.views ?? null;
   const rangeCaption =
     trend.length >= 2
       ? `${shortDate(trend[0].date)} – ${shortDate(trend[trend.length - 1].date)} • ${periodDef.days} Aggregation`
       : `${periodDef.days} Aggregation`;
 
-  const topClips = useMemo(
-    () =>
-      posts
-        .map((p) => ({ p, t: totalsFor(p) }))
-        .sort((a, b) => b.t.views - a.t.views)
-        .slice(0, 3),
-    [posts],
-  );
-  const kpiValue = (k: (typeof KPI_DEFS)[number]['key']) =>
-    formatCount(k === 'views' ? ov?.total_views ?? 0 : k === 'likes' ? ov?.total_likes ?? 0 : k === 'comments' ? ov?.total_comments ?? 0 : ov?.total_shares ?? 0);
-  const boostMult = split.tt > 0 && split.total > split.tt ? split.total / split.tt : null;
-  const avgWatch = (ov?.total_views ?? 0) > 0 && split.watch > 0 ? formatWatchTime(split.watch / split.total) : '—';
+  const topClips = useMemo(() => topQ.data ?? [], [topQ.data]);
+  const kpiValue = (k: (typeof KPI_DEFS)[number]['key']) => formatCount(totals[k] ?? 0);
+  const sparkD = (k: (typeof KPI_DEFS)[number]['key']) => {
+    const vals = trend.map((x) => x[k] ?? 0);
+    if (!vals.some((v) => v > 0)) return SPARK_FLAT;
+    return buildChart(vals, { w: 100, top: 3, bottom: 26 })?.d ?? SPARK_FLAT;
+  };
+  const boostMult = apiPlatform === 'all' && split.tt > 0 && split.total > split.tt ? split.total / split.tt : null;
+  const avgWatch = totals.views > 0 && totals.watch_time_seconds > 0 ? formatWatchTime(totals.watch_time_seconds / totals.views) : '—';
 
   const chart = useSharedValue(0);
   const spark = useSharedValue(0);
@@ -206,14 +221,9 @@ export default function Insights() {
   const wTT = barW(pct(split.tt));
   const wYT = barW(pct(split.yt));
   const wIG = barW(pct(split.ig));
+  const wFB = barW(pct(split.fb));
 
-  const dim = (p: 'tt' | 'yt' | 'ig') =>
-    platform === 'All Platforms' ||
-    (platform === 'TikTok' && p === 'tt') ||
-    (platform === 'YouTube' && p === 'yt') ||
-    (platform === 'Instagram' && p === 'ig')
-      ? 1
-      : 0.35;
+  const dim = (p: Kind) => (apiPlatform === 'all' || KIND_API[p] === apiPlatform ? 1 : 0.35);
 
   return (
     <View style={s.root}>
@@ -236,7 +246,11 @@ export default function Insights() {
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={s.page}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primaryContainer]} />}
+        >
           {/* Header */}
           <View style={s.headRow}>
             <View style={{ flex: 1 }}>
@@ -282,12 +296,10 @@ export default function Insights() {
                 <>
                   {p === 'All Platforms' ? (
                     <MaterialIcons name="hub" size={15} color={on ? C.text : C.muted} />
-                  ) : p === 'TikTok' ? (
-                    <View style={[s.chipDot, { backgroundColor: C.cyan }]} />
-                  ) : p === 'YouTube' ? (
-                    <View style={[s.chipDot, { backgroundColor: C.youtube }]} />
-                  ) : (
+                  ) : p === 'Instagram' ? (
                     <LinearGradient colors={[C.igStart, C.igMid] as const} style={s.chipDot} />
+                  ) : (
+                    <View style={[s.chipDot, { backgroundColor: PLATFORM_COLOR[CHIP_API[p] as ApiPlatform] }]} />
                   )}
                   <Text style={[s.caption, on ? { color: C.text, fontWeight: '600' } : null]}>{p}</Text>
                 </>
@@ -317,7 +329,7 @@ export default function Insights() {
               <View>
                 <Text style={s.label}>CROSS-CHANNEL REACH</Text>
                 <View style={s.baseline}>
-                  {ovLoading ? <Skeleton width={110} height={36} radius={8} /> : <Text style={s.statXl}>{formatCount(ov?.total_views ?? 0)}</Text>}
+                  {kpiLoading ? <Skeleton width={110} height={36} radius={8} /> : <Text style={s.statXl}>{formatCount(totals.views)}</Text>}
                   <Text style={[s.caption, { marginLeft: 8 }]}>Views</Text>
                 </View>
               </View>
@@ -331,9 +343,9 @@ export default function Insights() {
 
             <View style={s.chartBox}>
               {!primary ? (
-                overviewQ.isError && !ov ? (
+                seriesQ.isError && !seriesQ.data ? (
                   <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" style={s.chartMsg} />
-                ) : ovLoading ? (
+                ) : seriesQ.isLoading ? (
                   <Skeleton height={CHART_H - 20} radius={12} style={s.chartMsg} />
                 ) : (
                   <InlineMessage icon="show-chart" text="No activity yet for this period" style={s.chartMsg} />
@@ -407,9 +419,10 @@ export default function Insights() {
             <View style={s.legend}>
               {(
                 [
+                  ['yt', 'YouTube', split.total ? `${pct(split.yt)}%` : '—', formatCount(split.yt)],
+                  ['fb', 'Facebook', split.total ? `${pct(split.fb)}%` : '—', formatCount(split.fb)],
+                  ['ig', 'Instagram', split.total ? `${pct(split.ig)}%` : '—', formatCount(split.ig)],
                   ['tt', 'TikTok', split.total ? `${pct(split.tt)}%` : '—', formatCount(split.tt)],
-                  ['yt', 'Shorts', split.total ? `${pct(split.yt)}%` : '—', formatCount(split.yt)],
-                  ['ig', 'Reels', split.total ? `${pct(split.ig)}%` : '—', formatCount(split.ig)],
                 ] as const
               ).map(([k, name, pct, num]) => (
                 <View key={k} style={{ flex: 1, gap: 2, opacity: dim(k) }}>
@@ -441,7 +454,7 @@ export default function Insights() {
                   </View>
                 </View>
                 <Text style={[s.caption, { marginTop: 2 }]} numberOfLines={1}>
-                  Auto-syndicating unlocked {formatCount(split.total - split.tt)} extra views beyond TikTok.
+                  Cross-posting added {formatCount(split.total - split.tt)} views beyond TikTok.
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={C.muted} />
@@ -458,17 +471,19 @@ export default function Insights() {
                     <View style={s.kpiIcon}>
                       <MaterialIcons name={k.icon} size={18} color={k.tint} />
                     </View>
-                    {k.key === 'views' && delta !== null && delta > 0 ? (
-                      <View style={s.deltaPill}>
-                        <Text style={[s.label, { color: C.success }]}>{`+${delta.toFixed(1)}% ↑`}</Text>
+                    {change && change[k.key] !== null && change[k.key] !== 0 ? (
+                      <View style={[s.deltaPill, (change[k.key] ?? 0) < 0 && { backgroundColor: 'rgba(234,84,85,0.15)' }]}>
+                        <Text style={[s.label, { color: (change[k.key] ?? 0) < 0 ? C.danger : C.success }]}>
+                          {`${(change[k.key] ?? 0) > 0 ? '+' : ''}${(change[k.key] ?? 0).toFixed(1)}%`}
+                        </Text>
                       </View>
                     ) : null}
                   </View>
                   <View style={{ marginTop: 12 }}>
                     <Text style={[s.label, { color: C.muted }]}>{k.label}</Text>
-                    {ovLoading ? <Skeleton width={70} height={28} radius={6} style={{ marginVertical: 3 }} /> : <Text style={s.statLg}>{kpiValue(k.key)}</Text>}
+                    {kpiLoading ? <Skeleton width={70} height={28} radius={6} style={{ marginVertical: 3 }} /> : <Text style={s.statLg}>{kpiValue(k.key)}</Text>}
                   </View>
-                  <Spark d={sp.d} color={sp.color} fill={sp.fill} progress={spark} />
+                  <Spark d={sparkD(k.key)} color={sp.color} fill={sp.fill} progress={spark} />
                 </View>
               );
             })}
@@ -489,10 +504,11 @@ export default function Insights() {
               <Animated.View style={[{ height: '100%', overflow: 'hidden' }, wIG]}>
                 <LinearGradient colors={[C.igStart, C.igMid] as const} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
               </Animated.View>
+              <Animated.View style={[{ height: '100%', backgroundColor: PLATFORM_COLOR.facebook }, wFB]} />
             </View>
             <View style={s.rowBetween}>
-              <Text style={s.caption}>Total watch time: {split.watch > 0 ? formatWatchTime(split.watch) : '—'}</Text>
-              <Text style={s.caption}>Posts published: {formatCount(ov?.posts_published ?? 0)}</Text>
+              <Text style={s.caption}>Total watch time: {totals.watch_time_seconds > 0 ? formatWatchTime(totals.watch_time_seconds) : '—'}</Text>
+              <Text style={s.caption}>Posts published: {formatCount((apiPlatform === 'all' ? ov?.posts_published : selectedRow?.posts_published) ?? 0)}</Text>
             </View>
           </View>
 
@@ -510,28 +526,25 @@ export default function Insights() {
             </Pressable>
           </View>
 
-          {postsQ.isError && !postsQ.data ? (
+          {topQ.isError && !topQ.data ? (
             <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" />
-          ) : postsQ.isLoading ? (
+          ) : topQ.isLoading ? (
             <>
               <Skeleton height={136} radius={16} />
               <Skeleton height={136} radius={16} />
             </>
           ) : topClips.length === 0 ? (
-            <InlineMessage icon="movie" text="No posts yet — your top clips will rank here." />
+            <InlineMessage icon="movie" text={guest ? 'No posts yet.' : 'No views in this period yet — your top clips will rank here.'} />
           ) : null}
 
-          {topClips.map(({ p, t: tt }, i) => {
+          {topClips.map((p, i) => {
             const rank = i + 1;
+            const tt = metricsShort(p.totals);
             const eng = tt.views > 0 ? ((tt.likes + tt.comments + tt.shares) / tt.views) * 100 : 0;
-            const v = (pl: 'tiktok' | 'youtube' | 'instagram') => {
-              const a = latestAnalytic(p, pl);
-              return a ? formatCount(a.views) : '—';
-            };
             return (
               <Pressable
-                key={p.id}
-                onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(p.id) } })}
+                key={p.post_id}
+                onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(p.post_id) } })}
                 style={[s.card, s.clip]}
               >
                 <View style={s.thumb}>
@@ -550,14 +563,14 @@ export default function Insights() {
                       {p.title || 'Untitled clip'}
                     </Text>
                     <Text style={[s.caption, { marginTop: 4 }]}>
-                      {p.published_at ? shortDate(p.published_at) : 'Not published'} • {(p.distributions ?? []).length || 1} channels
+                      {p.platforms.length} {p.platforms.length === 1 ? 'channel' : 'channels'} • {periodDef.days}
                     </Text>
                   </View>
                   <View style={{ gap: 6, paddingTop: 4 }}>
                     <View style={s.rowBetween}>
                       <View style={s.baseline}>
                         <Text style={s.headline}>{formatCount(tt.views)}</Text>
-                        <Text style={[s.caption, { marginLeft: 4 }]}>total views</Text>
+                        <Text style={[s.caption, { marginLeft: 4 }]}>views gained</Text>
                       </View>
                     </View>
                     <View style={s.legendHead}>
@@ -565,10 +578,10 @@ export default function Insights() {
                       <Text style={[s.label, { color: C.success, marginLeft: 2 }]}>{eng.toFixed(1)}% engagement</Text>
                     </View>
                     <View style={s.pills}>
-                      {([['tt', v('tiktok')], ['yt', v('youtube')], ['ig', v('instagram')]] as const).map(([k, val]) => (
-                        <View key={k} style={s.miniPill}>
-                          <View style={[s.miniDot, { backgroundColor: k === 'tt' ? C.cyan : k === 'yt' ? C.youtube : C.igMid }]} />
-                          <Text style={s.caption}>{val}</Text>
+                      {p.platforms.map((pl) => (
+                        <View key={pl} style={s.miniPill}>
+                          <View style={[s.miniDot, { backgroundColor: PLATFORM_COLOR[pl] }]} />
+                          <Text style={s.caption}>{pl === 'youtube' ? 'YT' : pl === 'facebook' ? 'FB' : pl === 'instagram' ? 'IG' : 'TT'}</Text>
                         </View>
                       ))}
                     </View>
@@ -578,7 +591,7 @@ export default function Insights() {
             );
           })}
 
-          <AnimatedPressable style={s.cta} onPress={() => router.push('/posts' as never)}>
+          <AnimatedPressable style={s.cta} onPress={() => router.push('/posts')}>
             <MaterialIcons name="analytics" size={19} color={C.primary} />
             <Text style={s.labelMd}>View Full Video Breakdown</Text>
           </AnimatedPressable>

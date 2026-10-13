@@ -3,12 +3,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, RefreshControl, SafeAreaView, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { usePost, useSocialAccounts } from '@/api/hooks';
+import { errorText } from '@/api/client';
+import { isPostInFlight, useIsGuest, usePost, usePostAnalytics, useRetryDistribution } from '@/api/hooks';
 import type { Platform } from '@/api/types';
 import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
-import { buildChart, captionBody, hashtagsOf, latestAnalytic, timeAgo, totalsFor } from '@/components/post-utils';
+import { DIST_LABEL, STATUS_LABEL, buildChart, captionBody, metricsShort, postTags, privacyNote, timeAgo } from '@/components/post-utils';
+import { useRefresh } from '@/hooks/use-refresh';
 import { formatCount, formatDate, formatWatchTime } from '@/lib/format';
 import Animated, { Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
@@ -34,38 +36,55 @@ const C = {
   igStart: '#F58529',
   igMid: '#DD2A7B',
   igEnd: '#8134AF',
+  facebook: '#1877F2',
 } as const;
 
-const TABS = ['Aggregated', 'TikTok', 'YouTube', 'Reels'] as const;
-type Tab = (typeof TABS)[number];
+type Tab = 'Aggregated' | Platform;
 
-const PLAT_META: Record<Platform, { name: string; dot: string }> = {
-  tiktok: { name: 'TikTok (Master Original)', dot: C.cyan },
-  youtube: { name: 'YouTube Shorts', dot: C.youtube },
-  instagram: { name: 'Instagram Reels', dot: C.igMid },
+const PLAT_META: Record<Platform, { name: string; dot: string; icon: 'youtube' | 'facebook' | 'instagram' | 'tiktok' }> = {
+  tiktok: { name: 'TikTok', dot: C.cyan, icon: 'tiktok' },
+  youtube: { name: 'YouTube Shorts', dot: C.youtube, icon: 'youtube' },
+  instagram: { name: 'Instagram Reels', dot: C.igMid, icon: 'instagram' },
+  facebook: { name: 'Facebook Reels', dot: C.facebook, icon: 'facebook' },
 };
-const TAB_PLATFORM: Record<string, Platform | undefined> = { TikTok: 'tiktok', YouTube: 'youtube', Reels: 'instagram' };
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
+function PlatformIcon({ platform }: { platform: Platform }) {
+  if (platform === 'instagram') {
+    return (
+      <LinearGradient colors={[C.igStart, C.igMid, C.igEnd]} start={{ x: 0, y: 1 }} end={{ x: 1, y: 0 }} style={s.chIcon}>
+        <FontAwesome5 name="instagram" size={18} color={C.text} />
+      </LinearGradient>
+    );
+  }
+  return (
+    <View style={[s.chIcon, { backgroundColor: C.raised }]}>
+      <FontAwesome5 name={PLAT_META[platform].icon} size={18} color={PLAT_META[platform].dot} />
+    </View>
+  );
+}
+
 export default function PostDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const postQ = usePost(Number(id));
-  const accountsQ = useSocialAccounts();
+  const postId = Number(id);
+  const guest = useIsGuest();
+  const postQ = usePost(postId);
   const post = postQ.data;
-  const tiktokHandle = accountsQ.data?.find((a) => a.provider === 'tiktok')?.handle;
+  const inFlight = isPostInFlight(post);
+  const analyticsQ = usePostAnalytics(postId, { poll: inFlight });
+  const retryM = useRetryDistribution();
+  const { refreshing, onRefresh } = useRefresh([postQ, analyticsQ]);
+  const pa = analyticsQ.data;
 
   const [tab, setTab] = useState<Tab>('Aggregated');
-  const [copied, setCopied] = useState(false);
-  const [retry, setRetry] = useState<'idle' | 'busy' | 'queued'>('idle');
-  const [resync, setResync] = useState<'idle' | 'busy' | 'done'>('idle');
+  const [retryError, setRetryError] = useState<Record<number, string>>({});
 
   const pulse = useSharedValue(1);
   const ping = useSharedValue(0);
   const spin = useSharedValue(0);
   const spinBtn = useSharedValue(0);
   const glow = useSharedValue(0.4);
-  const bars = useSharedValue(0);
   const velocity = useSharedValue(0);
   const sparkLenSv = useSharedValue(340);
 
@@ -74,16 +93,15 @@ export default function PostDetails() {
     ping.value = withRepeat(withTiming(1, { duration: 1400, easing: Easing.out(Easing.ease) }), -1, false);
     spin.value = withRepeat(withTiming(1, { duration: 1600, easing: Easing.linear }), -1, false);
     glow.value = withRepeat(withTiming(0.8, { duration: 1600, easing: Easing.inOut(Easing.ease) }), -1, true);
-    bars.value = withDelay(200, withTiming(1, { duration: 1100, easing: Easing.out(Easing.cubic) }));
     velocity.value = withDelay(500, withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) }));
-  }, [pulse, ping, spin, glow, bars, velocity]);
+  }, [pulse, ping, spin, glow, velocity]);
 
   useEffect(() => {
     spinBtn.value = 0;
-    if (retry === 'busy' || resync === 'busy') {
+    if (retryM.isPending || refreshing) {
       spinBtn.value = withRepeat(withTiming(1, { duration: 700, easing: Easing.linear }), -1, false);
     }
-  }, [retry, resync, spinBtn]);
+  }, [retryM.isPending, refreshing, spinBtn]);
 
   const sparkLineProps = useAnimatedProps(() => ({ strokeDashoffset: sparkLenSv.value * (1 - velocity.value) }));
   const sparkAreaProps = useAnimatedProps(() => ({ opacity: Math.min(1, Math.max(0, (velocity.value - 0.5) * 2)) }));
@@ -93,58 +111,53 @@ export default function PostDetails() {
   const spinBtnStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spinBtn.value * 360}deg` }] }));
   const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
 
-  const totals = useMemo(() => (post ? totalsFor(post) : { views: 0, likes: 0, comments: 0, shares: 0, watch: 0 }), [post]);
+  const platforms = useMemo(() => pa?.platforms ?? [], [pa?.platforms]);
+  const selected = tab === 'Aggregated' ? null : platforms.find((p) => p.platform === tab);
+  const totals = metricsShort(selected ? selected.metrics : (pa?.totals ?? post?.totals));
   const heroStats: [string, string][] = [
     ['Likes', formatCount(totals.likes)],
     ['Comments', formatCount(totals.comments)],
     ['Shares', formatCount(totals.shares)],
     ['Watch Time', formatWatchTime(totals.watch)],
   ];
+
+  // Daily views (sum of the selected platforms' 30-day points).
   const series = useMemo(() => {
-    const rows = [...(post?.analytics ?? [])].sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
-    const per: Record<string, number> = {};
-    const out: { v: number; t: number }[] = [];
-    rows.forEach((r) => {
-      per[r.platform] = r.views ?? 0;
-      out.push({ v: Object.values(per).reduce((n, x) => n + x, 0), t: new Date(r.recorded_at).getTime() });
-    });
-    return out;
-  }, [post]);
-  const spark = useMemo(() => buildChart(series.map((x) => x.v), { w: 320, top: 3, bottom: 29 }), [series]);
+    const src = tab === 'Aggregated' ? platforms : platforms.filter((p) => p.platform === tab);
+    const byDate = new Map<string, number>();
+    src.forEach((p) => p.points.forEach((pt) => byDate.set(pt.date, (byDate.get(pt.date) ?? 0) + (pt.views ?? 0))));
+    return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
+  }, [platforms, tab]);
+  const spark = useMemo(() => buildChart(series, { w: 320, top: 3, bottom: 29 }), [series]);
   const sparkD = spark?.d ?? 'M0,29 L320,29';
   const sparkAreaD = `${sparkD} L 320 32 L 0 32 Z`;
-  const velocity_ = useMemo(() => {
-    if (series.length < 2) return null;
-    const hrs = (series[series.length - 1].t - series[0].t) / 3600000;
-    return hrs > 0 ? (series[series.length - 1].v - series[0].v) / hrs : null;
-  }, [series]);
+  const last7 = series.slice(-7);
+  const perDay = last7.length ? last7.reduce((n, v) => n + v, 0) / last7.length : null;
   const sparkLen = spark?.len ?? 340;
   useEffect(() => {
     sparkLenSv.value = sparkLen;
   }, [sparkLen, sparkLenSv]);
 
-  const targets = (post?.distributions ?? []).filter((d) => d.platform !== 'tiktok');
-  const tags = hashtagsOf(post?.caption);
-  const tiktokViews = post ? latestAnalytic(post, 'tiktok')?.views ?? 0 : 0;
+  const dists = post?.distributions ?? [];
+  const tags = post ? postTags(post) : [];
+  const tabs: Tab[] = ['Aggregated', ...platforms.map((p) => p.platform)];
 
-  const copy = () => {
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
-  const doRetry = () => {
-    if (retry !== 'idle') return;
-    setRetry('busy');
-    setTimeout(() => setRetry('queued'), 1200);
-  };
-  const doResync = () => {
-    if (resync !== 'idle') return;
-    setResync('busy');
-    setTimeout(() => {
-      setResync('done');
-      setTimeout(() => setResync('idle'), 2000);
-    }, 1000);
+  const share = () => {
+    if (!post) return;
+    const link = dists.find((d) => d.url)?.url ?? post.video_url;
+    Share.share({ message: `${post.title}${link ? `\n${link}` : ''}` }).catch(() => undefined);
   };
 
+  const doRetry = (distributionId: number) => {
+    if (guest) {
+      Alert.alert('Preview mode', 'Sign in to publish and retry your own posts.');
+      return;
+    }
+    setRetryError((m) => ({ ...m, [distributionId]: '' }));
+    retryM.mutate(distributionId, {
+      onError: (e) => setRetryError((m) => ({ ...m, [distributionId]: errorText(e) })),
+    });
+  };
 
   return (
     <SafeAreaView style={s.safe}>
@@ -157,324 +170,341 @@ export default function PostDetails() {
           <Text style={s.barTitle}>Post Details</Text>
         </View>
         <View style={s.barRight}>
-          <Pressable accessibilityLabel="Share post" style={({ pressed }) => [s.iconBtn, pressed && s.press]}>
+          <Pressable accessibilityLabel="Share post" style={({ pressed }) => [s.iconBtn, pressed && s.press]} onPress={share}>
             <MaterialIcons name="share" size={22} color={C.muted} />
-          </Pressable>
-          <Pressable accessibilityLabel="More options" style={({ pressed }) => [s.iconBtn, pressed && s.press]}>
-            <MaterialIcons name="more-vert" size={22} color={C.muted} />
           </Pressable>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={s.page}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primaryContainer]} />}
+      >
         {!post ? (
           postQ.isLoading ? (
-            <View style={{ gap: 12 }}>
+            <View style={s.loadingStack}>
               <Skeleton height={320} radius={12} />
               <Skeleton height={20} width="70%" />
               <Skeleton height={90} radius={12} />
               <Skeleton height={90} radius={12} />
             </View>
           ) : (
-            <InlineMessage
-              tone="danger"
-              icon="cloud-off"
-              text={postQ.isError ? "Couldn't load data" : 'Post not found'}
-            />
+            <InlineMessage tone="danger" icon="cloud-off" text={postQ.isError ? errorText(postQ.error) : 'Post not found'} />
           )
         ) : (
-        <>
-        {/* Video card */}
-        <View style={s.glow} pointerEvents="none" />
-        <View style={s.videoCard}>
-          <View style={s.stage}>
-            {post?.thumbnail ? <Image source={{ uri: post.thumbnail }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} /> : null}
-            <LinearGradient colors={['#947DFF55', '#0E0E1200', '#0E0E12']} style={StyleSheet.absoluteFill} />
-            <View style={s.badges}>
-              <View style={s.badge}>
-                <Animated.View style={[s.badgeDot, dotStyle]} />
-                <Text style={s.badgeText}>{tiktokHandle ? `@${tiktokHandle.replace(/^@/, '')}` : 'TikTok'}</Text>
-              </View>
-              <View style={s.badge}>
-                <MaterialIcons name="schedule" size={14} color={C.muted} />
-                <Text style={s.badgeCaption}>{timeAgo(post.published_at)}</Text>
-              </View>
-            </View>
-            <AnimatedPressable
-              accessibilityLabel="Play master video preview"
-              style={s.play}
-              onPress={() => {
-                if (post.video_url) Linking.openURL(post.video_url).catch(() => undefined);
-              }}
-            >
-              <View style={s.playTint} />
-              <MaterialIcons name="play-arrow" size={32} color={C.primary} />
-            </AnimatedPressable>
-          </View>
-
-          <View style={s.summary}>
-            <View style={s.titleRow}>
-              <Text style={s.title} numberOfLines={2}>{post.title || 'Untitled clip'}</Text>
-              <Pressable accessibilityLabel="Copy caption" style={({ pressed }) => [s.copyBtn, pressed && s.press]} onPress={copy}>
-                <MaterialIcons name={copied ? 'done' : 'content-copy'} size={18} color={copied ? C.success : C.muted} />
-              </Pressable>
-            </View>
-            {captionBody(post.caption) ? <Text style={s.caption}>{captionBody(post.caption)}</Text> : null}
-            {tags.length ? <Text style={s.tags}>{tags.join(' ')}</Text> : null}
-
-            <View style={s.source}>
-              <View style={s.sourceLeft}>
-                <View style={s.sourceAvatar}>
-                  <Text style={s.sourceTk}>Tk</Text>
+          <>
+            {/* Video card */}
+            <View style={s.glow} pointerEvents="none" />
+            <View style={s.videoCard}>
+              <View style={s.stage}>
+                {post.thumbnail ? <Image source={{ uri: post.thumbnail }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} /> : null}
+                <LinearGradient colors={['#947DFF55', '#0E0E1200', '#0E0E12']} style={StyleSheet.absoluteFill} />
+                <View style={s.badges}>
+                  <View style={s.badge}>
+                    <Animated.View style={[s.badgeDot, inFlight ? dotStyle : undefined]} />
+                    <Text style={s.badgeText}>{STATUS_LABEL[post.status] ?? 'Processing'}</Text>
+                  </View>
+                  <View style={s.badge}>
+                    <MaterialIcons name="schedule" size={14} color={C.muted} />
+                    <Text style={s.badgeCaption}>
+                      {post.status === 'scheduled' && post.scheduled_at ? `Scheduled ${formatDate(post.scheduled_at)}` : timeAgo(post.published_at ?? post.created_at)}
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={s.sourceTitle}>Master Source: TikTok</Text>
-                  <Text style={s.sourceSub}>{post.published_at ? `Published ${formatDate(post.published_at)}` : 'Not published yet'}</Text>
+                <AnimatedPressable
+                  accessibilityLabel="Play uploaded video"
+                  style={s.play}
+                  onPress={() => {
+                    if (post.video_url) Linking.openURL(post.video_url).catch(() => undefined);
+                  }}
+                >
+                  <View style={s.playTint} />
+                  <MaterialIcons name="play-arrow" size={32} color={C.primary} />
+                </AnimatedPressable>
+              </View>
+
+              <View style={s.summary}>
+                <View style={s.titleRow}>
+                  <Text style={s.title} numberOfLines={2}>
+                    {post.title || 'Untitled clip'}
+                  </Text>
                 </View>
-              </View>
-              <View style={s.sourceRight}>
-                <Text style={s.sourceNum}>{formatCount(tiktokViews)}</Text>
-                <Text style={s.sourceSub}>source views</Text>
-              </View>
-            </View>
-          </View>
-        </View>
+                {captionBody(post.caption) ? <Text style={s.caption}>{captionBody(post.caption)}</Text> : null}
+                {tags.length ? <Text style={s.tags}>{tags.join(' ')}</Text> : null}
 
-        {/* Distribution */}
-        <View style={s.section}>
-          <View style={s.secHead}>
-            <View style={s.secTitleRow}>
-              <View style={[s.secBar, { backgroundColor: C.primary }]} />
-              <Text style={s.secTitle}>Distribution</Text>
-              <Text style={s.secNote}>• {targets.length} Target {targets.length === 1 ? 'Channel' : 'Channels'}</Text>
-            </View>
-            <Pressable style={s.manage} onPress={() => router.push('/connect' as never)}>
-              <MaterialIcons name="sync-alt" size={16} color={C.primary} />
-              <Text style={s.manageText}>Manage Sync</Text>
-            </Pressable>
-          </View>
-
-          {targets.length === 0 ? (
-            <InlineMessage icon="call-split" text="No target channels yet for this post." />
-          ) : null}
-
-          {targets.map((d) => {
-            const yt = d.platform === 'youtube';
-            const failed = d.status === 'failed';
-            const done = d.status === 'published';
-            const tone = done ? C.success : failed ? C.danger : C.warning;
-            const label = done ? 'Published' : failed ? 'Failed' : d.status === 'processing' ? 'Processing' : 'Queued';
-            const sub = failed
-              ? 'Syndication attempt failed'
-              : d.external_id
-                ? `ID: #${d.external_id}`
-                : done
-                  ? 'Live'
-                  : 'Waiting for pipeline';
-            return (
-              <View style={s.chCard} key={d.id}>
-                <View style={s.chRow}>
-                  <View style={s.chLeft}>
-                    {yt ? (
-                      <View style={[s.chIcon, { backgroundColor: C.raised }]}>
-                        <FontAwesome5 name="youtube" size={18} color={C.youtube} />
-                      </View>
-                    ) : (
-                      <LinearGradient colors={[C.igStart, C.igMid, C.igEnd]} start={{ x: 0, y: 1 }} end={{ x: 1, y: 0 }} style={s.chIcon}>
-                        <FontAwesome5 name="instagram" size={18} color={C.text} />
-                      </LinearGradient>
-                    )}
-                    <View style={s.flexShrink}>
-                      <View style={s.chNameRow}>
-                        <Text style={s.chName}>{yt ? 'YouTube Shorts' : 'Instagram Reels'}</Text>
-                        <MaterialIcons name={done ? 'check-circle' : failed ? 'error-outline' : 'schedule'} size={14} color={tone} />
-                      </View>
-                      <Text style={s.chSub} numberOfLines={1}>{sub}</Text>
+                <View style={s.source}>
+                  <View style={s.sourceLeft}>
+                    <View style={s.sourceAvatar}>
+                      <MaterialIcons name={post.source === 'upload' ? 'upload' : 'download'} size={16} color={C.primary} />
+                    </View>
+                    <View>
+                      <Text style={s.sourceTitle}>{post.source === 'upload' ? 'Uploaded from app' : 'Imported from TikTok'}</Text>
+                      <Text style={s.sourceSub}>{post.published_at ? `First published ${formatDate(post.published_at)}` : 'Not published yet'}</Text>
                     </View>
                   </View>
-                  <View style={[s.pill, { backgroundColor: `${tone}26` }]}>
-                    <Animated.View style={[s.pillDot, { backgroundColor: tone }, failed ? dotStyle : undefined]} />
-                    <Text style={[s.pillText, { color: tone }]}>{label}</Text>
+                  <View style={s.sourceRight}>
+                    <Text style={s.sourceNum}>{formatCount(post.totals?.views ?? 0)}</Text>
+                    <Text style={s.sourceSub}>total views</Text>
                   </View>
-                </View>
-                {done && yt && d.external_id ? (
-                  <View style={s.chFoot}>
-                    <Text style={s.chSub}>Live on YouTube Shorts</Text>
-                    <Pressable
-                      style={({ pressed }) => [s.linkBtn, pressed && s.press]}
-                      onPress={() => Linking.openURL(`https://www.youtube.com/shorts/${d.external_id}`).catch(() => undefined)}
-                    >
-                      <Text style={s.linkText}>Shorts Link</Text>
-                      <MaterialIcons name="north-east" size={15} color={C.muted} />
-                    </Pressable>
-                  </View>
-                ) : null}
-                {failed ? (
-                  <View style={s.diag}>
-                    <View style={s.diagRow}>
-                      <MaterialIcons name="warning-amber" size={18} color={C.danger} style={{ marginTop: 2 }} />
-                      <Text style={s.diagText}>{d.error_message || 'Syndication failed. Check the connected account and retry.'}</Text>
-                    </View>
-                    <View style={s.diagBtns}>
-                      <AnimatedPressable
-                        style={[s.retry, retry === 'queued' && { backgroundColor: C.warning }]}
-                        onPress={doRetry}
-                      >
-                        <Animated.View style={retry === 'busy' ? spinBtnStyle : undefined}>
-                          <MaterialIcons name={retry === 'idle' ? 'replay' : retry === 'busy' ? 'refresh' : 'check'} size={16} color={retry === 'queued' ? C.bg : C.text} />
-                        </Animated.View>
-                        <Text style={[s.retryText, retry === 'queued' && { color: C.bg }]}>
-                          {retry === 'idle' ? 'Retry Syndication' : retry === 'busy' ? 'Re-dispatching...' : `Queued for ${yt ? 'Shorts' : 'Reels'}`}
-                        </Text>
-                      </AnimatedPressable>
-                      <AnimatedPressable style={s.reauth} onPress={() => router.push('/connect' as never)}>
-                        <MaterialIcons name="vpn-key" size={16} color={C.text} />
-                        <Text style={s.retryText}>Re-authorize</Text>
-                      </AnimatedPressable>
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Analytics */}
-        <View style={s.section}>
-          <View style={s.secHead}>
-            <View style={s.secTitleRow}>
-              <View style={[s.secBar, { backgroundColor: C.primaryContainer }]} />
-              <Text style={s.secTitle}>Cross-Platform Analytics</Text>
-            </View>
-            <View style={s.live}>
-              <View style={s.liveWrap}>
-                <Animated.View style={[s.liveRing, pingStyle]} />
-                <View style={s.liveDot} />
-              </View>
-              <Text style={s.liveText}>Live Sync</Text>
-            </View>
-          </View>
-
-          <View style={s.tabs}>
-            {TABS.map((t) => (
-              <Pressable key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
-                <Text style={[s.tabText, tab === t && s.tabTextActive]}>{t}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {(post.analytics ?? []).length === 0 ? (
-            <InlineMessage icon="query-stats" text="No analytics yet — stats appear after the first sync." />
-          ) : null}
-
-          {tab === 'Aggregated' && (
-            <View style={s.heroCard}>
-              <View style={s.heroGlow} />
-              <View style={s.heroHead}>
-                <Text style={s.heroLabel}>Combined Total Reach</Text>
-              </View>
-              <View style={s.heroNumRow}>
-                <Text style={s.heroNum}>{formatCount(totals.views)}</Text>
-                <Text style={s.heroUnit}>Gross Views</Text>
-              </View>
-              <View style={s.cluster}>
-                {heroStats.map(([label, val]) => (
-                  <View key={label} style={s.clusterCell}>
-                    <Text style={s.cap}>{label}</Text>
-                    <Text style={s.clusterVal}>{val}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={s.velocity}>
-                <View style={s.velHead}>
-                  <Text style={s.cap}>Syndication Velocity</Text>
-                  <Text style={s.cap}>{velocity_ !== null ? `${formatCount(Math.max(0, velocity_))} views/hr` : '—'}</Text>
-                </View>
-                <View style={s.spark}>
-                  <Svg width="100%" height={32} viewBox="0 0 320 32" preserveAspectRatio="none">
-                    <AnimatedPath d={sparkAreaD} fill={C.primary} fillOpacity={0.08} animatedProps={sparkAreaProps} />
-                    <AnimatedPath
-                      d={sparkD}
-                      fill="none"
-                      stroke={C.primary}
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeDasharray={sparkLen}
-                      animatedProps={sparkLineProps}
-                    />
-                  </Svg>
                 </View>
               </View>
             </View>
-          )}
 
-          <View style={s.platList}>
-            {(['tiktok', 'youtube', 'instagram'] as Platform[])
-              .filter((pl) => tab === 'Aggregated' || TAB_PLATFORM[tab] === pl)
-              .map((pl) => {
-                const a = latestAnalytic(post, pl);
-                const dim = !a;
-                const vals = a
-                  ? [formatCount(a.views), formatCount(a.likes), formatCount(a.comments), formatCount(a.shares)]
-                  : ['--', '--', '--', '--'];
+            {/* Distribution */}
+            <View style={s.section}>
+              <View style={s.secHead}>
+                <View style={s.secTitleRow}>
+                  <View style={[s.secBar, { backgroundColor: C.primary }]} />
+                  <Text style={s.secTitle}>Distribution</Text>
+                  <Text style={s.secNote}>
+                    • {dists.length} {dists.length === 1 ? 'Channel' : 'Channels'}
+                  </Text>
+                </View>
+                <Pressable style={s.manage} onPress={() => router.push('/connect')}>
+                  <MaterialIcons name="sync-alt" size={16} color={C.primary} />
+                  <Text style={s.manageText}>Accounts</Text>
+                </Pressable>
+              </View>
+
+              {dists.length === 0 ? <InlineMessage icon="call-split" text="No target channels for this post." /> : null}
+
+              {dists.map((d) => {
+                const failed = d.status === 'failed';
+                const done = d.status === 'published';
+                const tone = done ? C.success : failed ? C.danger : C.warning;
+                const note = privacyNote(d.privacy);
+                const busy = retryM.isPending && retryM.variables === d.id;
+                const sub = failed
+                  ? `Failed${d.attempts ? ` after ${d.attempts} attempt${d.attempts === 1 ? '' : 's'}` : ''}`
+                  : done
+                    ? d.published_at
+                      ? `Live • ${timeAgo(d.published_at)}`
+                      : 'Live'
+                    : d.status === 'queued'
+                      ? post.status === 'scheduled' && post.scheduled_at
+                        ? `Scheduled for ${formatDate(post.scheduled_at)}`
+                        : 'Waiting in queue'
+                      : d.status === 'uploading'
+                        ? 'Uploading to platform…'
+                        : 'Platform is processing…';
                 return (
-                  <View key={pl} style={[s.platCard, dim && { opacity: 0.85 }]}>
-                    <View style={s.platHead}>
-                      <View style={s.platName}>
-                        <View style={[s.platDot, { backgroundColor: PLAT_META[pl].dot }]} />
-                        <Text style={s.chName}>{PLAT_META[pl].name}</Text>
+                  <View style={s.chCard} key={d.id}>
+                    <View style={s.chRow}>
+                      <View style={s.chLeft}>
+                        <PlatformIcon platform={d.platform} />
+                        <View style={s.flexShrink}>
+                          <View style={s.chNameRow}>
+                            <Text style={s.chName}>{PLAT_META[d.platform].name}</Text>
+                            <MaterialIcons name={done ? 'check-circle' : failed ? 'error-outline' : 'schedule'} size={14} color={tone} />
+                          </View>
+                          <Text style={s.chSub} numberOfLines={1}>
+                            {sub}
+                          </Text>
+                        </View>
                       </View>
-                      {a ? (
-                        <Text style={[s.platNote, { color: C.muted }]}>Watch: {formatWatchTime(a.watch_time)}</Text>
-                      ) : (
-                        <View style={s.syncBad}>
-                          <MaterialIcons name="sync-problem" size={13} color={C.danger} />
-                          <Text style={s.syncBadText}>No data yet</Text>
-                        </View>
-                      )}
+                      <View style={[s.pill, { backgroundColor: `${tone}26` }]}>
+                        <Animated.View style={[s.pillDot, { backgroundColor: tone }, !done && !failed ? dotStyle : undefined]} />
+                        <Text style={[s.pillText, { color: tone }]}>{DIST_LABEL[d.status] ?? d.status}</Text>
+                      </View>
                     </View>
-                    <View style={s.statGrid}>
-                      {['Views', 'Likes', 'Comments', 'Shares'].map((label, i) => (
-                        <View key={label} style={s.statCell}>
-                          <Text style={s.cap}>{label}</Text>
-                          <Text style={[s.statVal, dim && { color: C.muted }]}>{vals[i]}</Text>
+                    {note ? (
+                      <View style={s.chFoot}>
+                        <MaterialIcons name="lock-outline" size={14} color={C.warning} />
+                        <Text style={[s.chSub, s.flexShrink]}>{note}</Text>
+                      </View>
+                    ) : null}
+                    {done && d.url ? (
+                      <View style={s.chFoot}>
+                        <Text style={s.chSub}>Live on {PLAT_META[d.platform].name}</Text>
+                        <Pressable
+                          style={({ pressed }) => [s.linkBtn, pressed && s.press]}
+                          onPress={() => d.url && Linking.openURL(d.url).catch(() => undefined)}
+                        >
+                          <Text style={s.linkText}>Open</Text>
+                          <MaterialIcons name="north-east" size={15} color={C.muted} />
+                        </Pressable>
+                      </View>
+                    ) : null}
+                    {failed ? (
+                      <View style={s.diag}>
+                        <View style={s.diagRow}>
+                          <MaterialIcons name="warning-amber" size={18} color={C.danger} style={s.diagIcon} />
+                          <Text style={s.diagText}>{d.error_message || 'Publishing failed. Check the connected account and retry.'}</Text>
                         </View>
-                      ))}
-                    </View>
+                        {retryError[d.id] ? <Text style={[s.diagText, { color: C.warning }]}>{retryError[d.id]}</Text> : null}
+                        <View style={s.diagBtns}>
+                          <AnimatedPressable style={s.retry} onPress={() => doRetry(d.id)} disabled={busy}>
+                            <Animated.View style={busy ? spinBtnStyle : undefined}>
+                              <MaterialIcons name={busy ? 'refresh' : 'replay'} size={16} color={C.text} />
+                            </Animated.View>
+                            <Text style={s.retryText}>{busy ? 'Re-queuing…' : 'Retry'}</Text>
+                          </AnimatedPressable>
+                          <AnimatedPressable style={s.reauth} onPress={() => router.push('/connect')}>
+                            <MaterialIcons name="vpn-key" size={16} color={C.text} />
+                            <Text style={s.retryText}>Re-authorize</Text>
+                          </AnimatedPressable>
+                        </View>
+                      </View>
+                    ) : null}
                   </View>
                 );
               })}
-          </View>
-        </View>
+            </View>
 
-        {/* Sync heartbeat */}
-        <View style={s.heartbeat}>
-          <View style={s.hbLeft}>
-            <Animated.View style={spinStyle}>
-              <MaterialIcons name="autorenew" size={15} color={C.primary} />
-            </Animated.View>
-            <Text style={s.cap}>Last synced: {postQ.dataUpdatedAt ? timeAgo(new Date(postQ.dataUpdatedAt).toISOString()) : '—'}</Text>
-          </View>
-          <Text style={s.cap}>Auto-refreshes every 15s</Text>
-        </View>
-        </>
+            {/* Analytics */}
+            <View style={s.section}>
+              <View style={s.secHead}>
+                <View style={s.secTitleRow}>
+                  <View style={[s.secBar, { backgroundColor: C.primaryContainer }]} />
+                  <Text style={s.secTitle}>Cross-Platform Analytics</Text>
+                </View>
+                {inFlight ? (
+                  <View style={s.live}>
+                    <View style={s.liveWrap}>
+                      <Animated.View style={[s.liveRing, pingStyle]} />
+                      <View style={s.liveDot} />
+                    </View>
+                    <Text style={s.liveText}>Live</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {tabs.length > 1 ? (
+                <View style={s.tabs}>
+                  {tabs.map((t) => (
+                    <Pressable key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
+                      <Text style={[s.tabText, tab === t && s.tabTextActive]} numberOfLines={1}>
+                        {t === 'Aggregated' ? 'All' : PLAT_META[t].name.split(' ')[0]}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+
+              {analyticsQ.isError && !pa ? (
+                <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load analytics. Pull to retry." />
+              ) : analyticsQ.isLoading ? (
+                <Skeleton height={160} radius={16} />
+              ) : platforms.length === 0 ? (
+                <InlineMessage icon="query-stats" text="No analytics yet — stats appear after the first sync once a channel is live." />
+              ) : null}
+
+              {pa && platforms.length > 0 ? (
+                <View style={s.heroCard}>
+                  <View style={s.heroGlow} />
+                  <View style={s.heroHead}>
+                    <Text style={s.heroLabel}>{selected ? PLAT_META[selected.platform].name : 'Combined Total Reach'}</Text>
+                  </View>
+                  <View style={s.heroNumRow}>
+                    <Text style={s.heroNum}>{formatCount(totals.views)}</Text>
+                    <Text style={s.heroUnit}>Views</Text>
+                  </View>
+                  <View style={s.cluster}>
+                    {heroStats.map(([label, val]) => (
+                      <View key={label} style={s.clusterCell}>
+                        <Text style={s.cap}>{label}</Text>
+                        <Text style={s.clusterVal}>{val}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={s.velocity}>
+                    <View style={s.velHead}>
+                      <Text style={s.cap}>Daily views (30d)</Text>
+                      <Text style={s.cap}>{perDay !== null ? `${formatCount(Math.round(perDay))} views/day (7d avg)` : '—'}</Text>
+                    </View>
+                    <View style={s.spark}>
+                      <Svg width="100%" height={32} viewBox="0 0 320 32" preserveAspectRatio="none">
+                        <AnimatedPath d={sparkAreaD} fill={C.primary} fillOpacity={0.08} animatedProps={sparkAreaProps} />
+                        <AnimatedPath
+                          d={sparkD}
+                          fill="none"
+                          stroke={C.primary}
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeDasharray={sparkLen}
+                          animatedProps={sparkLineProps}
+                        />
+                      </Svg>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={s.platList}>
+                {platforms
+                  .filter((p) => tab === 'Aggregated' || p.platform === tab)
+                  .map((p) => {
+                    const mt = p.metrics;
+                    return (
+                      <View key={p.distribution_id} style={s.platCard}>
+                        <View style={s.platHead}>
+                          <View style={s.platName}>
+                            <View style={[s.platDot, { backgroundColor: PLAT_META[p.platform].dot }]} />
+                            <Text style={s.chName}>{PLAT_META[p.platform].name}</Text>
+                          </View>
+                          {p.url ? (
+                            <Pressable style={s.linkBtn} onPress={() => p.url && Linking.openURL(p.url).catch(() => undefined)}>
+                              <Text style={s.linkText}>Open</Text>
+                              <MaterialIcons name="north-east" size={14} color={C.muted} />
+                            </Pressable>
+                          ) : (
+                            <Text style={[s.platNote, { color: C.muted }]}>{DIST_LABEL[p.status] ?? p.status}</Text>
+                          )}
+                        </View>
+                        <View style={s.statGrid}>
+                          {(
+                            [
+                              ['Views', mt.views],
+                              ['Likes', mt.likes],
+                              ['Comments', mt.comments],
+                              ['Shares', mt.shares],
+                            ] as const
+                          ).map(([label, v]) => (
+                            <View key={label} style={s.statCell}>
+                              <Text style={s.cap}>{label}</Text>
+                              <Text style={s.statVal}>{formatCount(v)}</Text>
+                            </View>
+                          ))}
+                        </View>
+                        <Text style={s.cap}>
+                          Saves {formatCount(mt.saves)} • Watch {formatWatchTime(mt.watch_time_seconds)}
+                          {p.captured_on ? ` • as of ${formatDate(p.captured_on)}` : ''}
+                        </Text>
+                      </View>
+                    );
+                  })}
+              </View>
+            </View>
+
+            {/* Sync heartbeat */}
+            <View style={s.heartbeat}>
+              <View style={s.hbLeft}>
+                <Animated.View style={inFlight ? spinStyle : undefined}>
+                  <MaterialIcons name="autorenew" size={15} color={C.primary} />
+                </Animated.View>
+                <Text style={s.cap}>Updated: {postQ.dataUpdatedAt ? timeAgo(new Date(postQ.dataUpdatedAt).toISOString()) : '—'}</Text>
+              </View>
+              <Text style={s.cap}>{inFlight ? 'Refreshing every 5s while publishing' : 'Pull down to refresh'}</Text>
+            </View>
+          </>
         )}
       </ScrollView>
 
       {/* Bottom dock */}
       <View style={s.dock}>
-        <AnimatedPressable style={s.editBtn}>
-          <MaterialIcons name="edit-note" size={18} color={C.text} />
-          <Text style={s.dockText}>Edit Caption</Text>
+        <AnimatedPressable style={s.editBtn} onPress={() => router.push('/post/new')}>
+          <MaterialIcons name="add" size={18} color={C.text} />
+          <Text style={s.dockText}>New Post</Text>
         </AnimatedPressable>
         <View style={s.resyncWrap}>
           <Animated.View style={[s.resyncGlow, glowStyle]} />
-          <AnimatedPressable style={s.resync} onPress={doResync}>
+          <AnimatedPressable style={s.resync} onPress={onRefresh} disabled={refreshing}>
             <LinearGradient colors={[C.primary, C.primaryContainer]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-            <Animated.View style={resync === 'busy' ? spinBtnStyle : undefined}>
-              <MaterialIcons name={resync === 'done' ? 'done-all' : 'sync'} size={19} color={C.onPrimaryFixed} />
+            <Animated.View style={refreshing ? spinBtnStyle : undefined}>
+              <MaterialIcons name="sync" size={19} color={C.onPrimaryFixed} />
             </Animated.View>
-            <Text style={s.resyncText}>{resync === 'done' ? 'Pipelines Synced!' : 'Re-sync All Channels'}</Text>
+            <Text style={s.resyncText}>{refreshing ? 'Refreshing…' : 'Refresh Status'}</Text>
           </AnimatedPressable>
         </View>
       </View>
@@ -484,6 +514,8 @@ export default function PostDetails() {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
+  loadingStack: { gap: 12 },
+  diagIcon: { marginTop: 2 },
   flexShrink: { flexShrink: 1 },
   page: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 112 },
   press: { opacity: 0.8, transform: [{ scale: 0.95 }] },

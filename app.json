@@ -41,6 +41,14 @@
           "icon": "./assets/images/android-icon-monochrome.png",
           "color": "#7C5CFF"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ClipPipeline needs access to your videos so you can pick a clip to publish.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

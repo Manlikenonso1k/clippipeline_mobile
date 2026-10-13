@@ -1,9 +1,35 @@
-// API response types — mirror the Laravel backend (snake_case, integer counts,
-// ISO-8601 times). Source of truth: clippipeline.com database migrations.
+// API response types — mirror docs/CONTRACT.md (v1, go-live) EXACTLY.
+// snake_case, integer counts (never null), ISO-8601 times, YYYY-MM-DD dates.
 
-export type Platform = 'tiktok' | 'youtube' | 'instagram';
-export type DistributionStatus = 'pending' | 'processing' | 'published' | 'failed';
+// ---- §1 Shared enums ----
+export type Platform = 'youtube' | 'facebook' | 'instagram' | 'tiktok';
+export type ConnectProvider = 'youtube' | 'meta' | 'tiktok';
+export type AccountStatus = 'active' | 'needs_reauth' | 'error';
+export type DistributionStatus = 'queued' | 'uploading' | 'processing' | 'published' | 'failed';
+export type PostStatus = 'scheduled' | 'processing' | 'published' | 'partial' | 'failed';
+export type Period = '7d' | '30d' | '90d';
+export type PostFilter = 'all' | 'published' | 'processing' | 'failed' | 'scheduled';
 
+export const PLATFORMS: Platform[] = ['youtube', 'facebook', 'instagram', 'tiktok'];
+
+export interface Metrics {
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  watch_time_seconds: number;
+}
+
+/** Percentage change vs the previous equal-length window (1 decimal); null when previous is 0. */
+export type MetricsChange = { [K in keyof Metrics]: number | null };
+
+/** One day of metrics (timeseries / per-post points). */
+export interface MetricsPoint extends Metrics {
+  date: string;
+}
+
+// ---- §2 Auth ----
 export interface User {
   id: number;
   name: string;
@@ -13,34 +39,63 @@ export interface User {
 
 export interface Me {
   user: User;
-  // server-authoritative values the client must not derive
   server_time: string;
+}
+
+// ---- §3 Connect & accounts ----
+export interface ConnectStartResponse {
+  provider: ConnectProvider;
+  platform: 'web' | 'mobile';
+  auth_url: string;
+  expires_at: string;
 }
 
 export interface SocialAccount {
   id: number;
+  platform: Platform;
+  /** duplicates `platform` (back-compat) */
   provider: Platform;
+  connect_provider: ConnectProvider;
   handle: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  external_id: string | null;
   follower_count: number;
+  status: AccountStatus;
+  /** status === 'active' */
   connected: boolean;
   expires_at: string | null;
+  last_synced_at: string | null;
+  error: string | null;
 }
 
+export interface DeleteAccountResponse {
+  deleted_ids: number[];
+}
+
+// ---- §4 Posts & publishing ----
 export interface PostDistribution {
   id: number;
+  post_id: number;
   platform: Platform;
-  external_id: string | null;
   status: DistributionStatus;
+  external_id: string | null;
+  /** open-on-platform link, null until published */
+  url: string | null;
+  /** real platform error text when failed */
   error_message: string | null;
+  /** e.g. "private" (YouTube unaudited), "SELF_ONLY" (TikTok unaudited) */
+  privacy: string | null;
+  attempts: number;
+  published_at: string | null;
+  updated_at: string;
 }
 
-export interface PostAnalytic {
+/** Latest snapshot per platform for this post. */
+export interface PostAnalytic extends Metrics {
   platform: Platform;
-  views: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  watch_time: number;
+  distribution_id: number;
+  captured_on: string;
   recorded_at: string;
 }
 
@@ -48,20 +103,99 @@ export interface Post {
   id: number;
   title: string;
   caption: string | null;
+  /** without '#' */
+  hashtags: string[];
   video_url: string;
   thumbnail: string | null;
   tiktok_id: string | null;
+  source: 'upload' | 'tiktok_ingest';
+  status: PostStatus;
+  scheduled_at: string | null;
   published_at: string | null;
+  created_at: string;
   distributions: PostDistribution[];
   analytics: PostAnalytic[];
+  /** sum of `analytics` */
+  totals: Metrics;
 }
 
+/** Local input for POST /posts (multipart). */
+export interface CreatePostInput {
+  video: { uri: string; name: string; type: string };
+  title: string;
+  caption?: string | null;
+  hashtags?: string[];
+  platforms: Platform[];
+  scheduled_at?: string | null;
+}
+
+// ---- §5 Analytics ----
 export interface AnalyticsOverview {
+  period: Period;
+  start: string;
+  end: string;
+  totals: Metrics;
+  previous: Metrics;
+  change: MetricsChange;
+  followers: { total: number; change: number };
+  posts_published: number;
+  connected_accounts: number;
+  // back-compat (equal totals.* and the timeseries views)
   total_views: number;
   total_likes: number;
   total_comments: number;
   total_shares: number;
-  posts_published: number;
-  connected_accounts: number;
   trend: { date: string; views: number }[];
+}
+
+export interface PlatformBreakdown {
+  platform: Platform;
+  connected: boolean;
+  followers: number;
+  posts_published: number;
+  totals: Metrics;
+  change: MetricsChange;
+}
+
+export interface AnalyticsPlatforms {
+  period: Period;
+  platforms: PlatformBreakdown[];
+}
+
+export interface AnalyticsTimeseries {
+  period: Period;
+  platform: Platform | 'all';
+  points: MetricsPoint[];
+}
+
+export interface PostPlatformAnalytics {
+  platform: Platform;
+  distribution_id: number;
+  status: DistributionStatus;
+  url: string | null;
+  captured_on: string;
+  metrics: Metrics;
+  points: MetricsPoint[];
+}
+
+export interface PostAnalyticsResponse {
+  post_id: number;
+  totals: Metrics;
+  platforms: PostPlatformAnalytics[];
+}
+
+export interface TopPost {
+  post_id: number;
+  title: string;
+  thumbnail: string | null;
+  platforms: Platform[];
+  totals: Metrics;
+}
+
+// ---- §7 Push payloads ----
+export interface PushPayload {
+  type: 'distribution_published' | 'distribution_failed' | 'account_needs_reauth';
+  screen: 'post' | 'connect';
+  postId?: number;
+  provider?: ConnectProvider;
 }

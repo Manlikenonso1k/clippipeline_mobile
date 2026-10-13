@@ -2,11 +2,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
-import { useMe, useOverview, usePosts, useSocialAccounts } from '@/api/hooks';
+import { useIsGuest, useMe, useOverview, usePosts, useSocialAccounts, useTimeseries } from '@/api/hooks';
+import type { Platform } from '@/api/types';
 import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
-import { buildChart, captionBody, latestAnalytic, postStatus, shortDate, timeAgo, trendDelta } from '@/components/post-utils';
+import { PLATFORM_COLOR, PLATFORM_SHORT, STATUS_LABEL, buildChart, captionBody, latestAnalytic, postStatus, shortDate, timeAgo } from '@/components/post-utils';
+import { useRefresh } from '@/hooks/use-refresh';
 import { formatCount } from '@/lib/format';
 import Animated, { Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
@@ -25,6 +27,7 @@ const C = {
   primaryContainer: '#947DFF',
   onPrimary: '#31009A',
   success: '#28C76F',
+  danger: '#EA5455',
   cyan: '#00F2EA',
   youtube: '#FF0000',
   igMid: '#DD2A7B',
@@ -45,9 +48,9 @@ function Stat({ label, badge, icon, value, unit, loading, children }: { label: s
       <View style={s.statTop}>
         <Text style={s.statLabel}>{label}</Text>
         {badge ? (
-          <View style={s.badge}>
-            <MaterialIcons name="arrow-upward" size={13} color={C.success} />
-            <Text style={s.badgeText}>{badge}</Text>
+          <View style={[s.badge, badge.startsWith('-') && s.badgeDown]}>
+            <MaterialIcons name={badge.startsWith('-') ? 'arrow-downward' : 'arrow-upward'} size={13} color={badge.startsWith('-') ? C.danger : C.success} />
+            <Text style={[s.badgeText, badge.startsWith('-') && { color: C.danger }]}>{badge.replace(/^-/, '')}</Text>
           </View>
         ) : null}
         {icon ? <MaterialIcons name={icon} size={18} color={C.muted} /> : null}
@@ -65,17 +68,20 @@ export default function Dashboard() {
   const [range, setRange] = useState<(typeof ranges)[number]>('30d');
   const [chartW, setChartW] = useState(0);
 
+  const guest = useIsGuest();
   const me = useMe();
   const overviewQ = useOverview(range);
+  const seriesQ = useTimeseries(range, 'all');
   const postsQ = usePosts('all');
   const accountsQ = useSocialAccounts();
+  const { refreshing, onRefresh } = useRefresh([overviewQ, seriesQ, postsQ, accountsQ, me]);
   const overview = overviewQ.data;
   const posts = (postsQ.data ?? []).slice(0, 3);
   const accounts = accountsQ.data ?? [];
   const ovLoading = overviewQ.isLoading;
-  const connectedCount = overview?.connected_accounts ?? accounts.filter((a) => a.connected).length;
-  const delta = trendDelta(overview?.trend);
-  const deltaBadge = delta !== null && delta > 0 ? `${delta.toFixed(1)}%` : undefined;
+  const connectedCount = overview?.connected_accounts ?? accounts.filter((a) => a.status === 'active').length;
+  const delta = overview?.change.views ?? null;
+  const deltaBadge = delta !== null && delta !== 0 ? `${delta < 0 ? '-' : ''}${Math.abs(delta).toFixed(1)}%` : undefined;
 
   const userName = me.data?.user?.name?.trim() || 'there';
   const firstName = userName.split(' ')[0];
@@ -85,8 +91,8 @@ export default function Dashboard() {
   const handle = handleSrc ? `@${handleSrc.replace(/^@/, '')}` : '@creator';
   const avatarUri = me.data?.user?.avatar ?? null;
 
-  const trend = useMemo(() => overview?.trend ?? [], [overview?.trend]);
-  const chart = useMemo(() => buildChart(trend.map((t) => t.views ?? 0)), [trend]);
+  const trend = useMemo(() => seriesQ.data?.points ?? [], [seriesQ.data?.points]);
+  const chart = useMemo(() => (trend.some((t) => t.views > 0) ? buildChart(trend.map((t) => t.views ?? 0)) : null), [trend]);
   const lineD = chart?.d ?? FALLBACK_D;
   const areaD = `${lineD} L340,160 L0,160 Z`;
   const lineLen = chart?.len ?? 420;
@@ -115,7 +121,7 @@ export default function Dashboard() {
   const ping = useSharedValue(0);
   const reveal = useSharedValue(0);
   const pop = useSharedValue(0);
-  const bars = [useSharedValue(0), useSharedValue(0), useSharedValue(0)];
+  const bars = [useSharedValue(0), useSharedValue(0), useSharedValue(0), useSharedValue(0)];
 
   useEffect(() => {
     pulse.value = withRepeat(withTiming(0.3, { duration: 1100, easing: Easing.inOut(Easing.ease) }), -1, true);
@@ -134,7 +140,8 @@ export default function Dashboard() {
   const b0 = useAnimatedStyle(() => ({ opacity: bars[0].value, transform: [{ scaleX: 0.4 + 0.6 * bars[0].value }] }));
   const b1 = useAnimatedStyle(() => ({ opacity: bars[1].value, transform: [{ scaleX: 0.4 + 0.6 * bars[1].value }] }));
   const b2 = useAnimatedStyle(() => ({ opacity: bars[2].value, transform: [{ scaleX: 0.4 + 0.6 * bars[2].value }] }));
-  const barStyles = [b0, b1, b2];
+  const b3 = useAnimatedStyle(() => ({ opacity: bars[3].value, transform: [{ scaleX: 0.4 + 0.6 * bars[3].value }] }));
+  const barStyles = [b0, b1, b2, b3];
 
   const chartH = 144;
   const sx = chartW / VW;
@@ -163,7 +170,11 @@ export default function Dashboard() {
         </View>
       </SafeAreaView>
 
-      <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={s.page}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primaryContainer]} />}
+      >
         {/* Greeting */}
         <View style={s.greet}>
           <View style={s.greetLeft}>
@@ -195,13 +206,14 @@ export default function Dashboard() {
 
         {/* Metrics */}
         <View style={s.grid}>
-          <Stat label="Total Views" badge={deltaBadge} value={formatCount(overview?.total_views ?? 0)} unit="views" loading={ovLoading} />
-          <Stat label="Total Likes" value={formatCount(overview?.total_likes ?? 0)} unit="likes" loading={ovLoading} />
+          <Stat label="Total Views" badge={deltaBadge} value={formatCount(overview?.totals.views ?? 0)} unit="views" loading={ovLoading} />
+          <Stat label="Total Likes" value={formatCount(overview?.totals.likes ?? 0)} unit="likes" loading={ovLoading} />
           <Stat label="Published" icon="electric-bolt" value={formatCount(overview?.posts_published ?? 0)} unit="clips" loading={ovLoading} />
-          <Stat label="Connected" value={`${connectedCount} of 3`} unit="hubs" loading={ovLoading && accountsQ.isLoading}>
+          <Stat label="Connected" value={`${connectedCount} of 4`} unit="channels" loading={ovLoading && accountsQ.isLoading}>
             <View style={s.dots}>
-              {([['tiktok', C.cyan], ['youtube', C.youtube], ['instagram', C.igMid]] as const).map(([pl, color], i) => {
-                const on = accounts.some((a) => a.provider === pl && a.connected);
+              {(['youtube', 'facebook', 'instagram', 'tiktok'] as Platform[]).map((pl, i) => {
+                const color = PLATFORM_COLOR[pl];
+                const on = accounts.some((a) => a.platform === pl && a.status === 'active');
                 return <View key={pl} style={[s.dotC, i > 0 && s.dotOverlap, { backgroundColor: on ? color : C.highest }]} />;
               })}
             </View>
@@ -270,9 +282,9 @@ export default function Dashboard() {
                 </>
               )}
             </View>
-            {overviewQ.isError && !overview ? (
+            {seriesQ.isError && !seriesQ.data ? (
               <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" style={s.chartMsg} />
-            ) : ovLoading ? (
+            ) : seriesQ.isLoading ? (
               <Skeleton height={14} style={s.chartMsg} />
             ) : !chart ? (
               <InlineMessage icon="show-chart" text="No activity yet for this period" style={s.chartMsg} />
@@ -290,10 +302,14 @@ export default function Dashboard() {
         <View style={s.postsSec}>
           <View style={s.postsHead}>
             <View style={s.titleRow}>
-              <Text style={s.h2}>Top Posts</Text>
-              <Text style={s.active}>{posts.length} active</Text>
+              <Text style={s.h2}>Recent Posts</Text>
+              <Text style={s.active}>{posts.length} shown</Text>
             </View>
-            <AnimatedPressable style={s.viewAll} onPress={() => router.push('/posts' as never)}>
+            <AnimatedPressable style={s.viewAll} onPress={() => router.push('/post/new')}>
+              <MaterialIcons name="add" size={16} color={C.primary} />
+              <Text style={s.viewAllText}>New</Text>
+            </AnimatedPressable>
+            <AnimatedPressable style={s.viewAll} onPress={() => router.push('/posts')}>
               <Text style={s.viewAllText}>View all</Text>
               <MaterialIcons name="chevron-right" size={16} color={C.primary} />
             </AnimatedPressable>
@@ -307,14 +323,17 @@ export default function Dashboard() {
               <Skeleton height={168} radius={12} />
             </>
           ) : posts.length === 0 ? (
-            <InlineMessage icon="movie" text="No posts yet — your syndicated clips will show up here." />
+            <InlineMessage
+              icon="movie"
+              text={guest ? 'No posts yet.' : 'No posts yet — tap New to upload a video and publish it everywhere.'}
+            />
           ) : null}
 
           {posts.map((p) => {
             const status = postStatus(p);
-            const tone = status === 'published' ? C.success : status === 'failed' ? '#EA5455' : '#FF9F43';
-            const label = status === 'published' ? 'Published' : status === 'failed' ? 'Failed' : 'Processing';
-            const v = (pl: 'tiktok' | 'youtube' | 'instagram') => {
+            const tone = status === 'published' ? C.success : status === 'failed' ? C.danger : status === 'partial' ? C.danger : '#FF9F43';
+            const label = STATUS_LABEL[status] ?? 'Processing';
+            const v = (pl: Platform) => {
               const a = latestAnalytic(p, pl);
               return a ? formatCount(a.views) : '—';
             };
@@ -337,17 +356,11 @@ export default function Dashboard() {
                     </View>
                     <Text numberOfLines={1} style={s.postSub}>{captionBody(p.caption) || ' '}</Text>
                   </View>
-                  <Text style={s.ago}>{p.published_at ? `Syndicated ${timeAgo(p.published_at)}` : 'Not published yet'}</Text>
+                  <Text style={s.ago}>{p.published_at ? `Published ${timeAgo(p.published_at)}` : p.scheduled_at ? `Scheduled ${shortDate(p.scheduled_at)}` : 'Not published yet'}</Text>
                 </View>
               </View>
               <View style={s.dist}>
-                {(
-                  [
-                    ['TIKTOK', v('tiktok'), C.cyan],
-                    ['SHORTS', v('youtube'), C.youtube],
-                    ['REELS', v('instagram'), C.igMid],
-                  ] as const
-                ).map(([name, val, color], i) => (
+                {p.distributions.slice(0, 4).map((d) => [PLATFORM_SHORT[d.platform].toUpperCase(), v(d.platform), PLATFORM_COLOR[d.platform]] as const).map(([name, val, color], i) => (
                   <Animated.View key={name} style={[s.distItem, barStyles[i]]}>
                     <View style={[s.distDot, { backgroundColor: color }]} />
                     <View style={s.flex}>
@@ -369,6 +382,7 @@ export default function Dashboard() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.surface },
   flex: { flex: 1 },
+  badgeDown: { backgroundColor: 'rgba(234,84,85,0.15)' },
   press: { opacity: 0.7 },
   header: { backgroundColor: C.surface, zIndex: 2 },
   headerRow: { height: 64, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -443,8 +457,8 @@ const s = StyleSheet.create({
   axisOn: { color: C.primary },
 
   postsSec: { gap: 16 },
-  postsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  postsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  titleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   active: {
     paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: C.high, color: C.muted,
     fontSize: 12, lineHeight: 16, fontWeight: '600', overflow: 'hidden',
