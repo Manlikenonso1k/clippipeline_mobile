@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "95158071669",
+    "project_id": "hospi-sales",
+    "storage_bucket": "hospi-sales.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:95158071669:android:1e9d740c3902229400233c",
+        "android_client_info": {
+          "package_name": "com.codebynonso.clippipeline"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2umg5_p5_g0ykc-FaStPMsGEnnvnPuYQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:95158071669:android:bdf582872e564cf300233c",
+        "android_client_info": {
+          "package_name": "com.icelandbeach.hospisales"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2umg5_p5_g0ykc-FaStPMsGEnnvnPuYQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:95158071669:android:f2849ce827b4b39e00233c",
+        "android_client_info": {
+          "package_name": "com.icelandbeach.hospisales.staging"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2umg5_p5_g0ykc-FaStPMsGEnnvnPuYQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
