@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.codebynonso.clippipeline",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/expo.icon/Assets/icon-active.png",
