@@ -94,6 +94,36 @@ export function InlineMessage({
   );
 }
 
+/** Error state with a tap-to-retry affordance (InlineMessage in the danger tone). */
+export function RetryMessage({
+  text = "Couldn't load data — tap to retry",
+  onRetry,
+  style,
+}: {
+  text?: string;
+  onRetry: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={text} onPress={onRetry} style={style}>
+      <InlineMessage tone="danger" icon="refresh" text={text} />
+    </Pressable>
+  );
+}
+
+/** "Updated 5m ago" from an ISO time (U-05). */
+export function updatedLabel(iso: string | null | undefined): string {
+  if (!iso) return 'Not synced yet';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return 'Not synced yet';
+  const min = Math.max(0, Math.floor((Date.now() - t) / 60000));
+  if (min < 1) return 'Updated just now';
+  if (min < 60) return `Updated ${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `Updated ${hr}h ago`;
+  return `Updated ${Math.floor(hr / 24)}d ago`;
+}
+
 const m = StyleSheet.create({
   box: {
     flexDirection: 'row',

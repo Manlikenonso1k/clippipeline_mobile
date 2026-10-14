@@ -6,7 +6,8 @@ import { Image, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet,
 import Svg, { Defs, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 import { useIsGuest, useMe, useOverview, usePosts, useSocialAccounts, useTimeseries } from '@/api/hooks';
 import type { Platform } from '@/api/types';
-import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { AnimatedPressable, InlineMessage, RetryMessage, Skeleton, updatedLabel } from '@/components/ui-kit';
+import { openNotifications, openProfile, requireAccount } from '@/store/uiStore';
 import { PLATFORM_COLOR, PLATFORM_SHORT, STATUS_LABEL, buildChart, captionBody, latestAnalytic, postStatus, shortDate, timeAgo } from '@/components/post-utils';
 import { useRefresh } from '@/hooks/use-refresh';
 import { formatCount } from '@/lib/format';
@@ -65,7 +66,7 @@ function Stat({ label, badge, icon, value, unit, loading, children }: { label: s
 }
 
 export default function Dashboard() {
-  const [range, setRange] = useState<(typeof ranges)[number]>('30d');
+  const [range, setRange] = useState<(typeof ranges)[number]>('7d');
   const [chartW, setChartW] = useState(0);
 
   const guest = useIsGuest();
@@ -90,6 +91,9 @@ export default function Dashboard() {
   const handleSrc = accounts.find((a) => a.handle)?.handle ?? me.data?.user?.email?.split('@')[0] ?? null;
   const handle = handleSrc ? `@${handleSrc.replace(/^@/, '')}` : '@creator';
   const avatarUri = me.data?.user?.avatar ?? null;
+  // H3: derived from GET /me → sync.status (active / idle / attention).
+  const syncStatus = me.data?.sync?.status ?? 'idle';
+  const syncLabel = syncStatus === 'active' ? 'Auto-sync\nactive' : syncStatus === 'attention' ? 'Needs\nattention' : 'Sync\nidle';
 
   const trend = useMemo(() => seriesQ.data?.points ?? [], [seriesQ.data?.points]);
   const chart = useMemo(() => (trend.some((t) => t.views > 0) ? buildChart(trend.map((t) => t.views ?? 0)) : null), [trend]);
@@ -160,12 +164,12 @@ export default function Dashboard() {
             <Text style={s.brandText}>Home</Text>
           </View>
           <View style={s.brand}>
-            <Pressable style={({ pressed }) => [s.bell, pressed && s.press]}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={openNotifications} style={({ pressed }) => [s.bell, pressed && s.press]}>
               <MaterialIcons name="notifications-none" size={22} color={C.muted} />
             </Pressable>
-            <View style={s.me}>
-              <MaterialIcons name="person" size={18} color={C.onPrimary} />
-            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Profile" onPress={openProfile} style={s.me}>
+              {avatarUri ? <Image source={{ uri: avatarUri }} style={s.me} /> : <MaterialIcons name="person" size={18} color={C.onPrimary} />}
+            </Pressable>
           </View>
         </View>
       </SafeAreaView>
@@ -200,9 +204,11 @@ export default function Dashboard() {
           </View>
           <View style={s.sync}>
             <Animated.View style={[s.syncDot, pulseStyle]} />
-            <Text style={s.syncText}>Auto-sync{'\n'}active</Text>
+            <Text style={s.syncText}>{syncLabel}</Text>
           </View>
         </View>
+
+        {overviewQ.isError && !overviewQ.data ? <RetryMessage onRetry={() => void overviewQ.refetch()} /> : null}
 
         {/* Metrics */}
         <View style={s.grid}>
@@ -225,7 +231,7 @@ export default function Dashboard() {
           <View style={s.perfHead}>
             <View style={s.flex}>
               <Text style={s.h2}>Performance</Text>
-              <Text style={s.caption}>Aggregated multi-platform reach</Text>
+              <Text style={s.caption}>Aggregated multi-platform reach{guest ? '' : ` • ${updatedLabel(me.data?.sync?.last_synced_at)}`}</Text>
             </View>
             <View style={s.toggle}>
               {ranges.map((r) => (
@@ -283,7 +289,7 @@ export default function Dashboard() {
               )}
             </View>
             {seriesQ.isError && !seriesQ.data ? (
-              <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" style={s.chartMsg} />
+              <RetryMessage onRetry={() => void seriesQ.refetch()} style={s.chartMsg} />
             ) : seriesQ.isLoading ? (
               <Skeleton height={14} style={s.chartMsg} />
             ) : !chart ? (
@@ -305,7 +311,7 @@ export default function Dashboard() {
               <Text style={s.h2}>Recent Posts</Text>
               <Text style={s.active}>{posts.length} shown</Text>
             </View>
-            <AnimatedPressable style={s.viewAll} onPress={() => router.push('/post/new')}>
+            <AnimatedPressable style={s.viewAll} onPress={() => requireAccount('Sign in to upload a video and publish it to your channels.') && router.push('/post/new')}>
               <MaterialIcons name="add" size={16} color={C.primary} />
               <Text style={s.viewAllText}>New</Text>
             </AnimatedPressable>
@@ -316,7 +322,7 @@ export default function Dashboard() {
           </View>
 
           {postsQ.isError && !postsQ.data ? (
-            <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" />
+            <RetryMessage onRetry={() => void postsQ.refetch()} />
           ) : postsQ.isLoading ? (
             <>
               <Skeleton height={168} radius={12} />

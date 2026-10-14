@@ -37,9 +37,100 @@ export interface User {
   avatar: string | null;
 }
 
+// ---- §9 Mobile sign-in broker ----
+export type LoginProvider = 'google' | 'facebook' | 'tiktok';
+
+export interface AuthStartResponse {
+  provider: LoginProvider;
+  auth_url: string;
+  expires_at: string;
+}
+
+export interface AuthExchangeResponse {
+  token: string;
+  user: User;
+}
+
+// ---- §10 Me, preferences, account deletion ----
+export type PlanName = 'free' | 'pro' | 'agency';
+
+export interface Plan {
+  name: PlanName;
+  clips_used: number;
+  /** null = unlimited */
+  clips_limit: number | null;
+  renews_at: string | null;
+  billing_url: string;
+}
+
+export interface SyncState {
+  status: 'active' | 'idle' | 'attention';
+  last_synced_at: string | null;
+}
+
+export interface Preferences {
+  notifications_enabled: boolean;
+  auto_sync: boolean;
+  default_platforms: Platform[];
+  default_hashtags: string[];
+}
+
+export interface AppFlags {
+  tiktok_audited: boolean;
+  youtube_audited: boolean;
+  support_email: string;
+  privacy_url: string;
+  terms_url: string;
+  delete_account_url: string;
+}
+
 export interface Me {
   user: User;
   server_time: string;
+  plan: Plan;
+  sync: SyncState;
+  preferences: Preferences;
+  flags: AppFlags;
+}
+
+export interface DeleteMeResponse {
+  status: 'scheduled';
+  completes_by: string;
+}
+
+// ---- §11 Notifications ----
+export type NotificationType = 'distribution_published' | 'distribution_failed' | 'account_needs_reauth';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  data: { postId?: number; provider?: ConnectProvider };
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationsResponse {
+  unread_count: number;
+  items: AppNotification[];
+}
+
+// ---- §13 TikTok creator info ----
+export type TikTokPrivacyLevel = 'PUBLIC_TO_EVERYONE' | 'MUTUAL_FOLLOW_FRIENDS' | 'FOLLOWER_OF_CREATOR' | 'SELF_ONLY';
+
+export interface CreatorInfo {
+  creator_nickname: string;
+  creator_username: string;
+  creator_avatar_url: string | null;
+  privacy_level_options: string[];
+  comment_disabled: boolean;
+  duet_disabled: boolean;
+  stitch_disabled: boolean;
+  max_video_post_duration_sec: number;
+  can_post: boolean;
+  reason: string | null;
+  audited: boolean;
 }
 
 // ---- §3 Connect & accounts ----
@@ -89,6 +180,8 @@ export interface PostDistribution {
   attempts: number;
   published_at: string | null;
   updated_at: string;
+  /** saved platform_options for this platform (§12) */
+  options: Record<string, unknown> | null;
 }
 
 /** Latest snapshot per platform for this post. */
@@ -127,6 +220,39 @@ export interface CreatePostInput {
   hashtags?: string[];
   platforms: Platform[];
   scheduled_at?: string | null;
+  /** client-measured duration (§12, P-02) */
+  video_duration_seconds?: number | null;
+  platform_options?: PlatformOptions;
+}
+
+export type YouTubePrivacy = 'public' | 'private' | 'unlisted';
+
+export interface YouTubeOptions {
+  privacy_status: YouTubePrivacy;
+  guidelines_confirmed: boolean;
+}
+
+export interface TikTokOptions {
+  privacy_level: string;
+  disable_comment: boolean;
+  disable_duet: boolean;
+  disable_stitch: boolean;
+  brand_organic_toggle: boolean;
+  brand_content_toggle: boolean;
+  is_aigc: boolean;
+  music_consent: boolean;
+}
+
+export interface PlatformOptions {
+  youtube?: YouTubeOptions;
+  tiktok?: TikTokOptions;
+}
+
+/** GET /posts query (§4, §12). */
+export interface PostsQuery {
+  filter?: PostFilter;
+  q?: string;
+  platform?: Platform | null;
 }
 
 // ---- §5 Analytics ----

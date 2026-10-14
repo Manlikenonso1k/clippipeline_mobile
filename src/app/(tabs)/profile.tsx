@@ -1,9 +1,11 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Platform as RNPlatform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   FadeInDown,
@@ -15,12 +17,20 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { BottomTabInset } from '@/constants/theme';
-import { useMe, useOverview, useSocialAccounts } from '@/api/hooks';
-import type { Platform } from '@/api/types';
+import { errorText } from '@/api/client';
+import { WEB_BASE_URL } from '@/api/config';
+import { queryClient, useDeleteMe, useFlags, useIsGuest, useMe, useOverview, useSocialAccounts, useUpdateMe, useUpdatePreferences } from '@/api/hooks';
+import type { Period, Platform, PlanName } from '@/api/types';
+import { PLATFORMS } from '@/api/types';
 import { PLATFORM_LABEL } from '@/components/post-utils';
-import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
-import { formatCount } from '@/lib/format';
+import { Sheet, SheetButton, SheetCheck, SheetInput, SheetLabel, SheetLink, SheetRow, SheetText } from '@/components/sheet';
+import { AnimatedPressable, InlineMessage, RetryMessage, Skeleton } from '@/components/ui-kit';
+import { exportAnalyticsCsv } from '@/lib/export';
+import { formatCount, formatDate } from '@/lib/format';
+import { requestNotificationPermissions, syncPushTokenToBackend, unregisterPushTokenFromBackend } from '@/lib/notifications';
+import { signOut as endSession } from '@/lib/session';
 import { useAuthStore } from '@/store/authStore';
+import { openNotifications, requireAccount } from '@/store/uiStore';
 
 // Kinetic Obsidian tokens (see "profile step 9"/DESIGN.md)
 const C = {
@@ -47,30 +57,43 @@ const C = {
 
 type IconName = ComponentProps<typeof MaterialIcons>['name'];
 
-const CLIP_LIMIT = 100; // plan allowance shown in the design (Pro tier); no plan endpoint exists yet.
+const PLAN_LABEL: Record<PlanName, string> = { free: 'Free', pro: 'Pro', agency: 'Agency' };
 
-const TIERS = [
-  { name: 'Free', price: '$0/mo', tag: 'Starter', desc: '5 clips/mo • 720p transcode • ClipPipeline watermark', current: false },
-  {
-    name: 'Pro Tier',
-    price: '$29/mo',
-    tag: 'Your Plan',
-    desc: '100 clips/mo • 1080p 60fps • Zero watermark • 3-platform concurrent sync • Priority render queue',
-    current: true,
-  },
-  {
-    name: 'Agency',
-    price: '$79/mo',
-    tag: 'Upgrade',
-    desc: 'Unlimited clips • Native 4K ingest • Instant transcode engine • Multi-seat team workspace • Custom webhooks',
-    current: false,
-  },
-] as const;
+// Plan matrix: names only + the real limit for the current plan (from GET /me). Prices live on the web billing page.
+const TIERS: { key: PlanName; name: string; desc: string }[] = [
+  { key: 'free', name: 'Free', desc: 'Try ClipPipeline with a small monthly clip allowance.' },
+  { key: 'pro', name: 'Pro', desc: 'A larger monthly clip allowance for regular cross-posting.' },
+  { key: 'agency', name: 'Agency', desc: 'No monthly clip limit.' },
+];
+
+const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
+const APP_BUILD =
+  RNPlatform.OS === 'android' ? Constants.expoConfig?.android?.versionCode : RNPlatform.OS === 'ios' ? Constants.expoConfig?.ios?.buildNumber : undefined;
+
+/** Days until the 1st of next month (clips_used counts the current calendar month). */
+function daysToMonthEnd(): number {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return Math.max(1, Math.ceil((next.getTime() - now.getTime()) / 86_400_000));
+}
+
+const parseTags = (raw: string) => [...new Set(raw.split(/[\s,]+/).map((t) => t.replace(/^#+/, '').trim()).filter(Boolean))];
 
 export default function ProfileScreen() {
   const [plansOpen, setPlansOpen] = useState(false);
-  const [prefs, setPrefs] = useState({ autoSync: true, watermark: true, push: true });
+  const [sheet, setSheet] = useState<'name' | 'defaults' | 'export' | 'delete' | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
+  const [tagsDraft, setTagsDraft] = useState('');
+  const [platformsDraft, setPlatformsDraft] = useState<Platform[]>([]);
+  const [confirmText, setConfirmText] = useState('');
+  const [sheetError, setSheetError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
+  const guest = useIsGuest();
+  const flags = useFlags();
+  const updateMe = useUpdateMe();
+  const updatePrefs = useUpdatePreferences();
+  const deleteMe = useDeleteMe();
   const meQ = useMe();
   const overviewQ = useOverview('30d');
   const accountsQ = useSocialAccounts();
@@ -90,11 +113,16 @@ export default function ProfileScreen() {
       .join('') || 'G';
   const handleSrc = accounts.find((a) => a.handle)?.handle ?? null;
   const handle = handleSrc ? `@${handleSrc.replace(/^@/, '')}` : null;
-  const used = ov?.posts_published ?? 0;
-  const usedPct = Math.min(100, Math.round((used / CLIP_LIMIT) * 100));
+  const plan = meQ.data?.plan;
+  const prefs = meQ.data?.preferences;
+  const planLabel = plan ? PLAN_LABEL[plan.name] ?? plan.name : '—';
+  const used = plan?.clips_used ?? 0;
+  const limit = plan?.clips_limit ?? null;
+  const usedPct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const billingUrl = plan?.billing_url || `${WEB_BASE_URL}/billing`;
   const statsLoading = overviewQ.isLoading;
   const stats = [
-    { label: 'Syndicated', value: formatCount(used) },
+    { label: 'Syndicated', value: formatCount(ov?.posts_published ?? 0) },
     { label: 'Total Views', value: formatCount(ov?.totals.views ?? 0), accent: true },
     { label: 'Platforms', value: String(connectedCount), sync: true },
   ] as const;
@@ -128,12 +156,83 @@ export default function ProfileScreen() {
     chevron.value = withTiming(next ? 180 : 0, { duration: 300, easing: Easing.inOut(Easing.ease) });
   }
 
+  const openUrl = (url: string) => WebBrowser.openBrowserAsync(url).catch(() => undefined);
+  const closeSheet = () => {
+    setSheet(null);
+    setSheetError(null);
+    setConfirmText('');
+  };
+
   async function signOut() {
-    try {
-      await useAuthStore.getState().clear();
-    } finally {
-      router.replace('/login');
+    await endSession();
+  }
+
+  function setPref(patch: Parameters<typeof updatePrefs.mutate>[0]) {
+    if (!requireAccount('Sign in to change your preferences.')) return;
+    updatePrefs.mutate(patch, { onError: (e) => Alert.alert("Couldn't save", errorText(e)) });
+  }
+
+  // R5: push toggle = notifications_enabled preference + device-token register / unregister.
+  async function setPush(on: boolean) {
+    if (!requireAccount('Sign in to manage notifications.')) return;
+    if (on) {
+      if (!(await requestNotificationPermissions())) {
+        Alert.alert('Notifications are off', 'Allow notifications for ClipPipeline in your device settings first.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open settings', onPress: () => Linking.openSettings().catch(() => undefined) },
+        ]);
+        return;
+      }
+      void syncPushTokenToBackend();
+    } else {
+      void unregisterPushTokenFromBackend();
     }
+    setPref({ notifications_enabled: on });
+  }
+
+  function openNameSheet() {
+    if (!requireAccount('Sign in to edit your profile.')) return;
+    setNameDraft(user?.name ?? '');
+    setSheet('name');
+  }
+
+  function openDefaultsSheet() {
+    if (!requireAccount('Sign in to set default hashtags and platforms.')) return;
+    setTagsDraft((prefs?.default_hashtags ?? []).map((t) => `#${t}`).join(' '));
+    setPlatformsDraft(prefs?.default_platforms ?? []);
+    setSheet('defaults');
+  }
+
+  async function runExport(period: Period) {
+    setExporting(true);
+    setSheetError(null);
+    try {
+      await exportAnalyticsCsv(period);
+      closeSheet();
+    } catch (e) {
+      setSheetError(errorText(e));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function deleteAccount() {
+    setSheetError(null);
+    // Unregister while our token is still valid — DELETE /me revokes it immediately.
+    await unregisterPushTokenFromBackend();
+    deleteMe.mutate(undefined, {
+      onSuccess: async (res) => {
+        closeSheet();
+        await useAuthStore.getState().clear();
+        queryClient.clear();
+        router.replace('/login');
+        Alert.alert(
+          'Account deletion scheduled',
+          `Your account and data will be fully deleted by ${formatDate(res?.completes_by ?? null)}. You have been signed out.`,
+        );
+      },
+      onError: (e) => setSheetError(errorText(e)),
+    });
   }
 
   return (
@@ -159,6 +258,7 @@ export default function ProfileScreen() {
         <Pressable
           accessibilityLabel="Notifications"
           accessibilityRole="button"
+          onPress={openNotifications}
           style={({ pressed }) => [s.backBtn, pressed && s.pressedSoft]}
         >
           <MaterialIcons name="notifications" size={22} color={C.muted} />
@@ -201,14 +301,16 @@ export default function ProfileScreen() {
             {handle ? <Text style={s.handle}>{handle}</Text> : null}
             {user?.email ? <Text style={s.email}>{user.email}</Text> : null}
             {meQ.isError && !user ? (
-              <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" style={s.heroMsg} />
+              <RetryMessage onRetry={() => void meQ.refetch()} style={s.heroMsg} />
             ) : null}
 
-            <View style={s.planPill}>
-              <MaterialIcons name="workspace-premium" size={14} color={C.tertiary} />
-              <Text style={s.planText}>Pro Tier Active</Text>
-              <View style={s.planDot} />
-            </View>
+            {!guest && plan ? (
+              <View style={s.planPill}>
+                <MaterialIcons name="workspace-premium" size={14} color={C.tertiary} />
+                <Text style={s.planText}>{planLabel} Plan</Text>
+                <View style={s.planDot} />
+              </View>
+            ) : null}
 
             <View style={s.statsStrip}>
               {stats.map((stat) => (
@@ -228,7 +330,24 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* R1 — guest: sign-in CTA instead of plan / usage */}
+        {guest ? (
+          <View style={s.card}>
+            <Text style={s.cardTitle}>You&apos;re in Preview mode</Text>
+            <Text style={s.cardSub}>The numbers on these screens are sample data. Sign in to connect your channels and see your own plan, usage and settings.</Text>
+            <View style={s.subActions}>
+              <AnimatedPressable accessibilityRole="button" style={s.upgradeWrap} onPress={() => router.push('/login')}>
+                <LinearGradient colors={[C.violet, C.violetEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.upgradeBtn}>
+                  <MaterialIcons name="login" size={18} color={C.text} />
+                  <Text style={s.upgradeText}>Sign in</Text>
+                </LinearGradient>
+              </AnimatedPressable>
+            </View>
+          </View>
+        ) : null}
+
         {/* Subscription & usage */}
+        {!guest ? (
         <View style={s.card}>
           <View style={s.subHeader}>
             <View style={s.subTitleRow}>
@@ -238,7 +357,7 @@ export default function ProfileScreen() {
               <View style={s.flex}>
                 <Text style={s.cardTitle}>Subscription & Usage</Text>
                 <Text style={s.cardSub} numberOfLines={1}>
-                  Pro Plan ($29/mo) • Renews Nov 14, 2024
+                  {plan ? `${planLabel} plan • ${plan.renews_at ? `Renews ${formatDate(plan.renews_at)}` : 'No renewal date'}` : meQ.isLoading ? 'Loading…' : '—'}
                 </Text>
               </View>
             </View>
@@ -254,7 +373,7 @@ export default function ProfileScreen() {
                 <Text style={s.meterLabel}>Monthly Clips Syndicated</Text>
               </View>
               <Text style={s.meterCount}>
-                {used} <Text style={s.meterCountMuted}>/ {CLIP_LIMIT} clips</Text>
+                {used} <Text style={s.meterCountMuted}>{limit === null ? 'clips • unlimited' : `/ ${limit} clips`}</Text>
               </Text>
             </View>
             <View style={s.track}>
@@ -268,28 +387,32 @@ export default function ProfileScreen() {
               </Animated.View>
             </View>
             <View style={s.meterFoot}>
-              <Text style={s.meterFootMuted}>Resets in 16 days</Text>
-              <Text style={s.meterFootAccent}>{100 - usedPct}% remaining</Text>
+              <Text style={s.meterFootMuted}>Resets in {daysToMonthEnd()} days</Text>
+              <Text style={s.meterFootAccent}>{limit === null ? 'Unlimited' : `${100 - usedPct}% remaining`}</Text>
             </View>
           </View>
 
           <View style={s.ingest}>
             <View style={s.ingestLeft}>
               <View style={s.iconTileSmSurface}>
-                <MaterialIcons name="hd" size={18} color={C.muted} />
+                <MaterialIcons name="cloud-sync" size={18} color={C.muted} />
               </View>
               <View>
-                <Text style={s.rowTitle}>Ingest & Transcode</Text>
-                <Text style={s.rowSub}>1080p 60fps Ultra HD</Text>
+                <Text style={s.rowTitle}>Analytics sync</Text>
+                <Text style={s.rowSub}>
+                  {meQ.data?.sync?.last_synced_at ? `Last synced ${formatDate(meQ.data.sync.last_synced_at)}` : 'Not synced yet'}
+                </Text>
               </View>
             </View>
             <View style={s.unlimitedBadge}>
-              <Text style={s.unlimitedText}>Unlimited</Text>
+              <Text style={s.unlimitedText}>
+                {meQ.data?.sync?.status === 'active' ? 'Active' : meQ.data?.sync?.status === 'attention' ? 'Attention' : 'Idle'}
+              </Text>
             </View>
           </View>
 
           <View style={s.subActions}>
-            <AnimatedPressable accessibilityRole="button" style={s.upgradeWrap}>
+            <AnimatedPressable accessibilityRole="button" style={s.upgradeWrap} onPress={() => openUrl(billingUrl)}>
               <Animated.View style={[s.upgradeGlow, glowStyle]}>
                 <LinearGradient
                   colors={[C.violet, C.violetEnd]}
@@ -305,7 +428,7 @@ export default function ProfileScreen() {
                 style={s.upgradeBtn}
               >
                 <MaterialIcons name="bolt" size={18} color={C.text} />
-                <Text style={s.upgradeText}>Upgrade to Agency ($79/mo)</Text>
+                <Text style={s.upgradeText}>{plan?.name === 'agency' ? 'Manage billing' : 'Upgrade plan'}</Text>
               </LinearGradient>
             </AnimatedPressable>
 
@@ -318,38 +441,41 @@ export default function ProfileScreen() {
             </AnimatedPressable>
           </View>
         </View>
+        ) : null}
 
-        {plansOpen ? (
+        {plansOpen && !guest ? (
           <Animated.View entering={FadeInDown.duration(260)} style={s.card}>
             <Text style={s.cardTitle}>Bandwidth & Tier Matrix</Text>
             <Text style={s.cardSub}>Scale clip pipeline processing throughput</Text>
             <View style={s.tiers}>
-              {TIERS.map((tier) => (
-                <View key={tier.name} style={[s.tier, tier.current && s.tierCurrent, !tier.current && tier.name === 'Free' && s.tierMuted]}>
+              {TIERS.map((tier) => {
+                const current = plan?.name === tier.key;
+                return (
+                <View key={tier.name} style={[s.tier, current && s.tierCurrent, !current && tier.key === 'free' && s.tierMuted]}>
                   <View style={s.tierHead}>
                     <View style={s.tierNameRow}>
                       <Text style={s.tierName}>{tier.name}</Text>
-                      <View style={s.tierPrice}>
-                        <Text style={[s.tierPriceText, tier.name === 'Agency' && { color: C.tertiary }, tier.current && { color: C.primary }]}>
-                          {tier.price}
-                        </Text>
-                      </View>
+                      {current ? (
+                        <View style={s.tierPrice}>
+                          <Text style={[s.tierPriceText, { color: C.primary }]}>{limit === null ? 'Unlimited' : `${limit} clips/mo`}</Text>
+                        </View>
+                      ) : null}
                     </View>
-                    {tier.current ? (
+                    {current ? (
                       <View style={s.yourPlan}>
-                        <Text style={s.yourPlanText}>{tier.tag}</Text>
+                        <Text style={s.yourPlanText}>Your Plan</Text>
                       </View>
-                    ) : tier.name === 'Agency' ? (
-                      <Pressable style={({ pressed }) => [s.tierUpgrade, pressed && s.pressedSoft]}>
-                        <Text style={s.tierUpgradeText}>Upgrade</Text>
-                      </Pressable>
                     ) : (
-                      <Text style={s.tierTag}>{tier.tag}</Text>
+                      <Pressable onPress={() => openUrl(billingUrl)} style={({ pressed }) => [s.tierUpgrade, pressed && s.pressedSoft]}>
+                        <Text style={s.tierUpgradeText}>View</Text>
+                      </Pressable>
                     )}
                   </View>
                   <Text style={s.cardSub}>{tier.desc}</Text>
                 </View>
-              ))}
+                );
+              })}
+              <Text style={s.cardSub}>Prices and plan details are on the web billing page.</Text>
             </View>
           </Animated.View>
         ) : null}
@@ -358,26 +484,29 @@ export default function ProfileScreen() {
         <Section label="Preferences & Automation">
           <Row
             icon="cloud-sync"
-            title="Auto-Syndication Engine"
-            subtitle="Publish instantly across channels upon transcode"
-            right={<Toggle value={prefs.autoSync} onChange={(v) => setPrefs((p) => ({ ...p, autoSync: v }))} />}
-          />
-          <Divider />
-          <Row
-            icon="branding-watermark"
-            title="Watermark Removal"
-            subtitle="Strip TikTok / IG native branding stamps"
-            right={<Toggle value={prefs.watermark} onChange={(v) => setPrefs((p) => ({ ...p, watermark: v }))} />}
+            title="Auto-Sync Analytics"
+            subtitle="Refresh stats from your connected channels every few hours"
+            right={<Toggle value={prefs?.auto_sync ?? true} onChange={(v) => setPref({ auto_sync: v })} />}
           />
           <Divider />
           <Row
             icon="notifications-active"
             title="Push Notifications"
-            subtitle="Alerts on successful syndication & queue errors"
-            right={<Toggle value={prefs.push} onChange={(v) => setPrefs((p) => ({ ...p, push: v }))} />}
+            subtitle="Alerts when a post publishes or fails, and when an account needs re-auth"
+            right={<Toggle value={prefs?.notifications_enabled ?? true} onChange={(v) => void setPush(v)} />}
           />
           <Divider />
-          <Row icon="tag" title="Default Hashtags & Captions" subtitle="Channel-specific keyword presets" chevron />
+          <Row
+            icon="tag"
+            title="Default Hashtags & Platforms"
+            subtitle={
+              prefs?.default_hashtags?.length
+                ? prefs.default_hashtags.map((t) => `#${t}`).join(' ')
+                : 'Pre-fill new posts with your usual hashtags and channels'
+            }
+            onPress={openDefaultsSheet}
+            chevron
+          />
         </Section>
 
         {/* Integrations & data */}
@@ -399,30 +528,144 @@ export default function ProfileScreen() {
             }
           />
           <Divider />
-          <Row icon="download" title="Download Analytics Data" subtitle="Export retention & syndication log (CSV)" chevron />
+          <Row
+            icon="download"
+            title="Download Analytics Data"
+            subtitle="Per-post stats for every channel (CSV)"
+            onPress={() => requireAccount('Sign in to export your analytics as CSV.') && setSheet('export')}
+            chevron
+          />
+        </Section>
+
+        {/* Account */}
+        <Section label="Account">
+          <Row icon="edit" title="Edit Profile" subtitle={user?.name ? `Name: ${user.name}` : 'Change your display name'} onPress={openNameSheet} chevron />
+          <Divider />
+          <Row
+            icon="delete-forever"
+            tint={C.danger}
+            title="Delete Account"
+            subtitle="Permanently delete your account and data"
+            onPress={() => requireAccount('Sign in to manage your account.') && setSheet('delete')}
+            chevron
+          />
         </Section>
 
         {/* Support & legal */}
         <Section label="Support & Legal">
-          <Row icon="forum" title="Creator Community & Help Center" subtitle="Tutorials, Discord access & 24/7 chat support" chevron />
+          <Row
+            icon="forum"
+            title="Help & Support"
+            subtitle={`Email ${flags.support_email}`}
+            onPress={() => Linking.openURL(`mailto:${flags.support_email}`).catch(() => undefined)}
+            chevron
+          />
           <Divider />
-          <Row icon="gavel" tint={C.muted} title="Terms of Service" chevron />
+          <Row icon="gavel" tint={C.muted} title="Terms of Service" onPress={() => openUrl(flags.terms_url)} chevron />
           <Divider />
-          <Row icon="policy" tint={C.muted} title="Privacy Policy" chevron />
+          <Row icon="policy" tint={C.muted} title="Privacy Policy" onPress={() => openUrl(flags.privacy_url)} chevron />
         </Section>
 
         {/* Sign out */}
-        <AnimatedPressable accessibilityRole="button" onPress={signOut} style={s.logout}>
-          <MaterialIcons name="logout" size={20} color={C.danger} />
-          <Text style={s.logoutText}>Log Out of Pipeline</Text>
-        </AnimatedPressable>
+        {!guest ? (
+          <AnimatedPressable accessibilityRole="button" onPress={signOut} style={s.logout}>
+            <MaterialIcons name="logout" size={20} color={C.danger} />
+            <Text style={s.logoutText}>Log Out of Pipeline</Text>
+          </AnimatedPressable>
+        ) : null}
 
         <View style={s.footer}>
-          <Text style={s.footerText}>ClipPipeline Mobile v3.8.4 (Build 882)</Text>
-          <Text style={s.footerText}>Encrypted Cloud Storage • SOC2 Certified</Text>
+          <Text style={s.footerText}>
+            ClipPipeline Mobile v{APP_VERSION}
+            {APP_BUILD ? ` (Build ${APP_BUILD})` : ''}
+          </Text>
+          <Text style={s.footerText}>ClipPipeline is not affiliated with TikTok, Meta or YouTube.</Text>
         </View>
       </ScrollView>
 
+      {/* R4 — edit name */}
+      <Sheet visible={sheet === 'name'} onClose={closeSheet} title="Edit profile">
+        <SheetLabel>Name</SheetLabel>
+        <SheetInput value={nameDraft} onChangeText={setNameDraft} placeholder="Your name" maxLength={100} autoFocus />
+        {sheetError ? <InlineMessage tone="danger" icon="error-outline" text={sheetError} /> : null}
+        <SheetButton
+          tone="primary"
+          label="Save"
+          disabled={!nameDraft.trim() || nameDraft.trim() === user?.name}
+          loading={updateMe.isPending}
+          onPress={() =>
+            updateMe.mutate({ name: nameDraft.trim() }, { onSuccess: closeSheet, onError: (e) => setSheetError(errorText(e)) })
+          }
+        />
+      </Sheet>
+
+      {/* R6 / C3 — default hashtags + platforms */}
+      <Sheet visible={sheet === 'defaults'} onClose={closeSheet} title="Post defaults" subtitle="Used to pre-fill the New Cross-Post form.">
+        <SheetLabel>Default hashtags</SheetLabel>
+        <SheetInput value={tagsDraft} onChangeText={setTagsDraft} placeholder="#editing #creator" autoCapitalize="none" autoCorrect={false} />
+        <SheetLabel>Default platforms</SheetLabel>
+        {PLATFORMS.map((p) => (
+          <SheetCheck
+            key={p}
+            label={PLATFORM_LABEL[p]}
+            checked={platformsDraft.includes(p)}
+            onChange={(on) => setPlatformsDraft((cur) => (on ? [...cur, p] : cur.filter((x) => x !== p)))}
+          />
+        ))}
+        <SheetText>Leave all unchecked to select every connected channel.</SheetText>
+        {sheetError ? <InlineMessage tone="danger" icon="error-outline" text={sheetError} /> : null}
+        <SheetButton
+          tone="primary"
+          label="Save defaults"
+          loading={updatePrefs.isPending}
+          onPress={() =>
+            updatePrefs.mutate(
+              { default_hashtags: parseTags(tagsDraft), default_platforms: platformsDraft },
+              { onSuccess: closeSheet, onError: (e) => setSheetError(errorText(e)) },
+            )
+          }
+        />
+      </Sheet>
+
+      {/* R7 — CSV export */}
+      <Sheet visible={sheet === 'export'} onClose={closeSheet} title="Download analytics" subtitle="One row per post and channel, with the latest stats.">
+        {(['7d', '30d', '90d'] as Period[]).map((p) => (
+          <SheetRow
+            key={p}
+            icon="download"
+            label={p === '7d' ? 'Last 7 days' : p === '30d' ? 'Last 30 days' : 'Last 90 days'}
+            disabled={exporting}
+            onPress={() => void runExport(p)}
+          />
+        ))}
+        {exporting ? <SheetText>Preparing CSV…</SheetText> : null}
+        {sheetError ? <InlineMessage tone="danger" icon="error-outline" text={sheetError} /> : null}
+      </Sheet>
+
+      {/* R10 / U-03 — delete account */}
+      <Sheet visible={sheet === 'delete'} onClose={closeSheet} title="Delete your account?">
+        <SheetText>
+          This permanently deletes your ClipPipeline account: your profile, posts, uploaded videos, analytics history and
+          notification settings. ClipPipeline&apos;s access to your YouTube, Meta and TikTok accounts is revoked right away
+          and you are signed out on every device. Deletion completes within 7 days.
+        </SheetText>
+        <SheetText tone="warning">Videos already published on YouTube, Facebook, Instagram or TikTok are not deleted from those platforms.</SheetText>
+        <SheetText>
+          You can also request deletion on the web: <SheetLink label="Delete account page" onPress={() => openUrl(flags.delete_account_url)} />
+        </SheetText>
+        <SheetLabel>Type DELETE to confirm</SheetLabel>
+        <SheetInput value={confirmText} onChangeText={setConfirmText} placeholder="DELETE" autoCapitalize="characters" autoCorrect={false} />
+        {sheetError ? <InlineMessage tone="danger" icon="error-outline" text={sheetError} /> : null}
+        <SheetButton
+          tone="danger"
+          icon="delete-forever"
+          label="Delete my account"
+          disabled={confirmText.trim() !== 'DELETE'}
+          loading={deleteMe.isPending}
+          onPress={() => void deleteAccount()}
+        />
+        <SheetButton label="Cancel" onPress={closeSheet} />
+      </Sheet>
     </SafeAreaView>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { GlobalSheets } from '@/components/global-sheets';
 import { invalidateForPush, queryClient } from '@/api/hooks';
 import * as Notifications from 'expo-notifications';
 import {
@@ -81,7 +82,9 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="post/new" />
           <Stack.Screen name="post/[id]" />
+          <Stack.Screen name="auth" />
         </Stack>
+        <GlobalSheets />
       </ThemeProvider>
     </QueryClientProvider>
   );

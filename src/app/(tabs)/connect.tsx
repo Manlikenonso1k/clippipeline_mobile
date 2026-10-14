@@ -5,11 +5,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { errorText } from '@/api/client';
-import { useConnectStart, useDeleteAccount, useIsGuest, useSocialAccounts } from '@/api/hooks';
+import { useConnectStart, useDeleteAccount, useFlags, useIsGuest, useMe, useSocialAccounts } from '@/api/hooks';
 import type { ConnectProvider, Platform, SocialAccount } from '@/api/types';
-import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { Sheet, SheetButton, SheetLink, SheetText } from '@/components/sheet';
+import { AnimatedPressable, InlineMessage, RetryMessage, Skeleton } from '@/components/ui-kit';
+import { openProfile, requireAccount } from '@/store/uiStore';
 import { useRefresh } from '@/hooks/use-refresh';
 import { formatCount, formatDate } from '@/lib/format';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
@@ -43,14 +45,30 @@ const C = {
   danger: '#EA5455',
 } as const;
 
-const PIPELINE_RULES = [
-  { icon: 'water-drop', color: C.success, label: 'Automatic Watermark Removal', value: 'Active', valueColor: C.success },
-  { icon: 'hd', color: C.primary, label: 'Source Ingestion Bitrate', value: '1080p Ultra HD', valueColor: C.text },
-  { icon: 'lock', color: C.warning, label: 'Credential Protocol', value: 'OAuth 2.0 Encrypted', valueColor: C.muted },
-] as const;
+const YOUTUBE_TOS_URL = 'https://www.youtube.com/t/terms';
+const GOOGLE_PRIVACY_URL = 'https://policies.google.com/privacy';
+
+// U-04: what each connection lets ClipPipeline access, and why — shown before OAuth starts.
+const RATIONALE: Record<ConnectProvider, string[]> = {
+  youtube: [
+    'Upload the videos you choose to your YouTube channel as Shorts.',
+    'Read basic channel info (name, avatar, subscriber count) and view/like/comment counts for videos posted through ClipPipeline, to show your analytics.',
+    'We never delete or edit your existing videos. You can revoke access any time here or in your Google Account settings.',
+  ],
+  meta: [
+    'Publish Reels to the Facebook Page and linked Instagram Business/Creator account you select.',
+    'Read Page / account names, follower counts and insights for posts made through ClipPipeline, to show your analytics.',
+    'We never post anything without your explicit confirmation. You can disconnect any time.',
+  ],
+  tiktok: [
+    'Read your TikTok profile (nickname, avatar) and posting settings so the post form can show your options.',
+    'Upload the videos you choose to your TikTok account, with the privacy and interaction settings you pick each time.',
+    'Read view/like/comment/share counts for videos posted through ClipPipeline. You can disconnect any time.',
+  ],
+};
 
 type BtnState = 'idle' | 'authenticating' | 'connected';
-type RowState = 'connected' | 'needs_reauth' | 'not_connected';
+type RowState = 'connected' | 'needs_reauth' | 'error' | 'not_connected';
 type Notice = { tone: 'ok' | 'error'; text: string } | null;
 
 const PROVIDERS: {
@@ -80,7 +98,7 @@ const REDIRECT = 'clippipelinemobile://connect';
 
 function rowState(a: SocialAccount | undefined): RowState {
   if (!a) return 'not_connected';
-  return a.status === 'active' ? 'connected' : 'needs_reauth';
+  return a.status === 'active' ? 'connected' : a.status === 'error' ? 'error' : 'needs_reauth';
 }
 
 type ConnectResult = { provider?: string; status?: string; message?: string };
@@ -122,15 +140,52 @@ export default function ConnectScreen() {
   const { refreshing, onRefresh } = useRefresh([accountsQ]);
   const [pending, setPending] = useState<ConnectProvider | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
-  const params = useLocalSearchParams<{ provider?: string; status?: string; message?: string }>();
+  const [rationale, setRationale] = useState<ConnectProvider | null>(null);
+  const params = useLocalSearchParams<{ provider?: string; status?: string; message?: string; reauth?: string }>();
   const handledLink = useRef<string | null>(null);
   const refetchAccounts = accountsQ.refetch;
+  const flags = useFlags();
+  const prefs = useMe().data?.preferences;
+  const openUrl = (url: string) => WebBrowser.openBrowserAsync(url).catch(() => undefined);
+  const pipelineRules = [
+    {
+      icon: 'cloud-sync',
+      color: C.success,
+      label: 'Auto-sync analytics',
+      value: prefs ? (prefs.auto_sync ? 'On' : 'Off') : '—',
+      valueColor: prefs?.auto_sync ? C.success : C.muted,
+    },
+    {
+      icon: 'call-split',
+      color: C.primary,
+      label: 'Default platforms',
+      value: prefs?.default_platforms?.length ? prefs.default_platforms.map((p) => ROW_NAME[p]).join(', ') : 'All connected',
+      valueColor: C.text,
+    },
+    {
+      icon: 'tag',
+      color: C.primary,
+      label: 'Default hashtags',
+      value: prefs?.default_hashtags?.length ? prefs.default_hashtags.map((h) => `#${h}`).join(' ') : 'None',
+      valueColor: C.text,
+    },
+    { icon: 'lock', color: C.warning, label: 'Credential protocol', value: 'OAuth 2.0, encrypted at rest', valueColor: C.muted },
+  ] as const;
 
   const accounts = useMemo(() => accountsQ.data ?? [], [accountsQ.data]);
   const acct = (p: Platform) => accounts.find((a) => a.platform === p);
   const loading = accountsQ.isLoading;
   const linkedCount = PROVIDERS.filter((pv) => pv.platforms.some((p) => rowState(acct(p)) === 'connected')).length;
   const reauthCount = accounts.filter((a) => a.status !== 'active').length;
+
+  // P9: "Re-authorize" from a failed distribution / notification opens this provider's flow.
+  const reauthParam: ConnectProvider | null =
+    params.reauth === 'youtube' || params.reauth === 'meta' || params.reauth === 'tiktok' ? params.reauth : null;
+  const sheetProvider = rationale ?? (guest ? null : reauthParam);
+  const closeRationale = () => {
+    setRationale(null);
+    if (params.reauth) router.setParams({ reauth: undefined });
+  };
 
   // The OAuth redirect can also arrive as a deep link: Expo Router opens /connect?provider=&status=&message=.
   useEffect(() => {
@@ -144,13 +199,17 @@ export default function ConnectScreen() {
     router.setParams({ provider: undefined, status: undefined, message: undefined });
   }, [params.provider, params.status, params.message, refetchAccounts]);
 
+  /** Shows the U-04 rationale first; OAuth starts from the sheet's Continue button. */
+  function askConnect(provider: ConnectProvider) {
+    if (pending) return;
+    if (!requireAccount('Sign in to connect your own YouTube, Meta and TikTok accounts.')) return;
+    setRationale(provider);
+  }
+
   async function connect(provider: ConnectProvider) {
     if (pending) return;
     if (guest) {
-      Alert.alert('Sign in required', 'Sign in to connect your own accounts.', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign in', onPress: () => router.push('/login') },
-      ]);
+      requireAccount('Sign in to connect your own YouTube, Meta and TikTok accounts.');
       return;
     }
     setNotice(null);
@@ -172,14 +231,13 @@ export default function ConnectScreen() {
   }
 
   function disconnect(a: SocialAccount) {
-    if (guest) return;
+    if (guest || deleteM.isPending) return;
     const meta = a.connect_provider === 'meta';
     const name = meta ? 'Meta' : ROW_NAME[a.platform];
+    const revoke = 'ClipPipeline revokes and deletes its access tokens and stops publishing and syncing. Posts already on the platform stay there.';
     Alert.alert(
       `Disconnect ${name}?`,
-      meta
-        ? 'Facebook and Instagram share one Meta login, so both will be disconnected.'
-        : 'ClipPipeline will stop publishing to this account.',
+      meta ? `Facebook and Instagram share one Meta login, so both will be disconnected. ${revoke}` : revoke,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -208,9 +266,9 @@ export default function ConnectScreen() {
           <Text style={s.brandTitle}>Connect</Text>
         </View>
         <View style={s.topActions}>
-          <View style={s.avatar}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Profile" onPress={openProfile} style={s.avatar}>
             <MaterialIcons name="person" size={18} color={C.onPrimary} />
-          </View>
+          </Pressable>
         </View>
       </View>
 
@@ -256,7 +314,7 @@ export default function ConnectScreen() {
             text={notice.text}
           />
         ) : null}
-        {accountsQ.isError && !accountsQ.data ? <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load your accounts. Pull to retry." /> : null}
+        {accountsQ.isError && !accountsQ.data ? <RetryMessage text="Couldn't load your accounts — tap to retry" onRetry={() => void accountsQ.refetch()} /> : null}
         {loading ? <Skeleton height={14} width="60%" /> : null}
         {!loading && !accountsQ.isError && accounts.length === 0 ? (
           <InlineMessage icon="link-off" text="No accounts linked yet. Connect a channel to start publishing." />
@@ -268,6 +326,7 @@ export default function ConnectScreen() {
             const anyRow = rows.some((r) => r.account);
             const allOn = rows.every((r) => r.state === 'connected');
             const needsAuth = rows.some((r) => r.state === 'needs_reauth');
+            const hasError = rows.some((r) => r.state === 'error');
             const busy = pending === pv.provider;
             const first = rows.find((r) => r.account)?.account;
             return (
@@ -275,8 +334,8 @@ export default function ConnectScreen() {
                 <RowWrap>
                   <Tag icon="call-split" label={pv.tag} color={C.muted} bg={C.containerHigh} />
                   <StatusPill
-                    label={allOn ? 'Connected' : needsAuth ? 'Needs re-auth' : 'Not connected'}
-                    color={allOn ? C.success : needsAuth ? C.warning : C.muted}
+                    label={allOn ? 'Connected' : hasError ? 'Error' : needsAuth ? 'Needs re-auth' : 'Not connected'}
+                    color={allOn ? C.success : hasError ? C.danger : needsAuth ? C.warning : C.muted}
                   />
                 </RowWrap>
 
@@ -298,6 +357,19 @@ export default function ConnectScreen() {
                   <View style={s.identityCopy}>
                     <Text style={s.platformName}>{pv.name}</Text>
                     <Text style={s.meta}>{pv.blurb}</Text>
+                    {pv.provider === 'youtube' ? (
+                      <Text style={s.meta}>
+                        By connecting you agree to the{' '}
+                        <Text accessibilityRole="link" style={s.linkText} onPress={() => openUrl(YOUTUBE_TOS_URL)}>
+                          YouTube Terms of Service
+                        </Text>{' '}
+                        and{' '}
+                        <Text accessibilityRole="link" style={s.linkText} onPress={() => openUrl(GOOGLE_PRIVACY_URL)}>
+                          Google Privacy Policy
+                        </Text>
+                        .
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
 
@@ -309,24 +381,26 @@ export default function ConnectScreen() {
                         {ROW_NAME[platform]}
                         {account && (account.handle || account.display_name) ? ` • ${account.handle ?? account.display_name}` : ''}
                       </Text>
-                      <Text style={[s.insetSub, state === 'needs_reauth' && { color: C.warning }]} numberOfLines={3}>
+                      <Text style={[s.insetSub, state === 'needs_reauth' && { color: C.warning }, state === 'error' && { color: C.danger }]} numberOfLines={3}>
                         {state === 'connected'
                           ? `${formatCount(account?.follower_count ?? 0)} followers${account?.last_synced_at ? ` • synced ${formatDate(account.last_synced_at)}` : ''}`
                           : state === 'needs_reauth'
                             ? account?.error || 'Authorization expired — reconnect to keep publishing.'
-                            : 'Not connected'}
+                            : state === 'error'
+                              ? account?.error || 'This account has an error — reconnect to fix it.'
+                              : 'Not connected'}
                       </Text>
                     </View>
                     <StatusPill
-                      label={state === 'connected' ? 'Active' : state === 'needs_reauth' ? 'Re-auth' : 'Off'}
-                      color={state === 'connected' ? C.success : state === 'needs_reauth' ? C.warning : C.muted}
+                      label={state === 'connected' ? 'Active' : state === 'needs_reauth' ? 'Re-auth' : state === 'error' ? 'Error' : 'Off'}
+                      color={state === 'connected' ? C.success : state === 'needs_reauth' ? C.warning : state === 'error' ? C.danger : C.muted}
                     />
                   </View>
                 ))}
 
                 {loading ? null : allOn ? (
                   <View style={s.bannerRow}>
-                    <AnimatedPressable accessibilityRole="button" style={s.linkBtn} onPress={() => connect(pv.provider)} disabled={busy}>
+                    <AnimatedPressable accessibilityRole="button" style={s.linkBtn} onPress={() => askConnect(pv.provider)} disabled={busy}>
                       <Text style={s.linkText}>{busy ? 'Opening…' : 'Reconnect'}</Text>
                     </AnimatedPressable>
                     <View style={s.flexFill} />
@@ -335,6 +409,7 @@ export default function ConnectScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={`Disconnect ${pv.name}`}
                         style={s.linkBtn}
+                        disabled={deleteM.isPending}
                         onPress={() => disconnect(first)}
                       >
                         <Text style={[s.linkText, { color: C.danger }]}>Disconnect</Text>
@@ -345,11 +420,11 @@ export default function ConnectScreen() {
                   <>
                     <ConnectButton
                       state={busy ? 'authenticating' : 'idle'}
-                      onPress={() => connect(pv.provider)}
+                      onPress={() => askConnect(pv.provider)}
                       label={anyRow ? `Reconnect ${pv.name}` : `Connect ${pv.name}`}
                     />
                     {first && !guest ? (
-                      <AnimatedPressable accessibilityRole="button" style={[s.linkBtn, s.center]} onPress={() => disconnect(first)}>
+                      <AnimatedPressable accessibilityRole="button" style={[s.linkBtn, s.center]} disabled={deleteM.isPending} onPress={() => disconnect(first)}>
                         <Text style={[s.linkText, { color: C.danger }]}>Disconnect</Text>
                       </AnimatedPressable>
                     ) : null}
@@ -369,9 +444,11 @@ export default function ConnectScreen() {
               </View>
               <Text style={s.rulesTitle}>Pipeline Engine Rules</Text>
             </View>
-            <Text style={s.rulesBadge}>Defaults</Text>
+            <Text accessibilityRole="button" style={s.rulesBadge} onPress={openProfile}>
+              Defaults
+            </Text>
           </View>
-          {PIPELINE_RULES.map((rule) => (
+          {pipelineRules.map((rule) => (
             <View style={s.ruleRow} key={rule.label}>
               <View style={s.ruleLeft}>
                 <MaterialIcons name={rule.icon} size={16} color={rule.color} />
@@ -381,7 +458,52 @@ export default function ConnectScreen() {
             </View>
           ))}
         </View>
+
+        {/* U-01 */}
+        <Text style={s.meta}>
+          <Text accessibilityRole="link" style={s.linkText} onPress={() => openUrl(flags.privacy_url)}>
+            Privacy Policy
+          </Text>
+          {'  •  '}
+          <Text accessibilityRole="link" style={s.linkText} onPress={() => openUrl(flags.terms_url)}>
+            Terms of Service
+          </Text>
+        </Text>
       </ScrollView>
+
+      {/* U-04 — rationale before OAuth */}
+      <Sheet
+        visible={sheetProvider !== null}
+        onClose={closeRationale}
+        title={sheetProvider ? `Connect ${PROVIDER_NAME[sheetProvider]}` : ''}
+        subtitle="What ClipPipeline can access, and why"
+      >
+        {(sheetProvider ? RATIONALE[sheetProvider] : []).map((line) => (
+          <SheetText key={line}>• {line}</SheetText>
+        ))}
+        {sheetProvider === 'youtube' ? (
+          <SheetText>
+            ClipPipeline uses YouTube API Services. By connecting you agree to the{' '}
+            <SheetLink label="YouTube Terms of Service" onPress={() => openUrl(YOUTUBE_TOS_URL)} /> and the{' '}
+            <SheetLink label="Google Privacy Policy" onPress={() => openUrl(GOOGLE_PRIVACY_URL)} />.
+          </SheetText>
+        ) : null}
+        <SheetText>
+          See our <SheetLink label="Privacy Policy" onPress={() => openUrl(flags.privacy_url)} /> for how we store and delete your data.
+        </SheetText>
+        <SheetButton
+          tone="primary"
+          icon="add-link"
+          label="Continue"
+          onPress={() => {
+            const p = sheetProvider;
+            closeRationale();
+            // Let the sheet finish dismissing before the auth browser is presented (iOS).
+            if (p) setTimeout(() => void connect(p), 350);
+          }}
+        />
+        <SheetButton label="Not now" onPress={closeRationale} />
+      </Sheet>
     </SafeAreaView>
   );
 }

@@ -8,6 +8,7 @@ import type {
   Me,
   Metrics,
   MetricsChange,
+  NotificationsResponse,
   MetricsPoint,
   Period,
   Platform,
@@ -20,6 +21,7 @@ import type {
   TopPost,
 } from './types';
 import { PLATFORMS } from './types';
+import { FALLBACK_FLAGS, WEB_BASE_URL } from './config';
 
 const now = Date.now();
 const iso = (daysAgo: number) => new Date(now - daysAgo * 86_400_000).toISOString();
@@ -65,6 +67,10 @@ function changeOf(cur: Metrics, prev: Metrics): MetricsChange {
 export const DEMO_ME: Me = {
   user: { id: 1, name: 'Alex Rivera', email: 'alex@clippipeline.app', avatar: null },
   server_time: new Date(now).toISOString(),
+  plan: { name: 'free', clips_used: 3, clips_limit: 5, renews_at: null, billing_url: `${WEB_BASE_URL}/billing` },
+  sync: { status: 'active', last_synced_at: iso(0.05) },
+  preferences: { notifications_enabled: true, auto_sync: true, default_platforms: [], default_hashtags: [] },
+  flags: { ...FALLBACK_FLAGS },
 };
 
 function account(id: number, platform: Platform, handle: string, followers: number, status: SocialAccount['status'] = 'active'): SocialAccount {
@@ -110,6 +116,7 @@ function dist(id: number, postId: number, platform: Platform, status: PostDistri
     attempts: status === 'queued' ? 0 : 1,
     published_at: status === 'published' ? iso(2) : null,
     updated_at: iso(0.2),
+    options: null,
     ...extra,
   };
 }
@@ -191,10 +198,39 @@ export const DEMO_POSTS: Post[] = [
   }),
 ];
 
-export function demoPosts(filter: PostFilter | string): Post[] {
-  if (filter === 'all' || !filter) return DEMO_POSTS;
-  return DEMO_POSTS.filter((p) => p.status === filter);
+export function demoPosts(filter: PostFilter | string, q = '', platform: Platform | null = null): Post[] {
+  const needle = q.trim().toLowerCase();
+  return DEMO_POSTS.filter(
+    (p) =>
+      (filter === 'all' || !filter || p.status === filter) &&
+      (!needle || `${p.title} ${p.caption ?? ''}`.toLowerCase().includes(needle)) &&
+      (!platform || p.distributions.some((d) => d.platform === platform)),
+  );
 }
+
+export const DEMO_NOTIFICATIONS: NotificationsResponse = {
+  unread_count: 1,
+  items: [
+    {
+      id: 'demo-1',
+      type: 'distribution_published',
+      title: 'Published to TikTok',
+      body: 'Your clip is live on TikTok.',
+      data: { postId: 102 },
+      read_at: null,
+      created_at: iso(0.1),
+    },
+    {
+      id: 'demo-2',
+      type: 'distribution_failed',
+      title: 'Instagram upload failed',
+      body: 'Instagram access token expired. Reconnect Meta and retry.',
+      data: { postId: 103 },
+      read_at: iso(0.5),
+      created_at: iso(1),
+    },
+  ],
+};
 
 export function demoPost(id: number): Post {
   return DEMO_POSTS.find((p) => p.id === id) ?? DEMO_POSTS[0];

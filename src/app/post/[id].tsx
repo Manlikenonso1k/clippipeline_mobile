@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, RefreshControl, SafeAreaView, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, RefreshControl, SafeAreaView, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { errorText } from '@/api/client';
 import { isPostInFlight, useIsGuest, usePost, usePostAnalytics, useRetryDistribution } from '@/api/hooks';
@@ -11,6 +11,7 @@ import type { Platform } from '@/api/types';
 import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
 import { DIST_LABEL, STATUS_LABEL, buildChart, captionBody, metricsShort, postTags, privacyNote, timeAgo } from '@/components/post-utils';
 import { useRefresh } from '@/hooks/use-refresh';
+import { requireAccount } from '@/store/uiStore';
 import { formatCount, formatDate, formatWatchTime } from '@/lib/format';
 import Animated, { Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
@@ -150,7 +151,7 @@ export default function PostDetails() {
 
   const doRetry = (distributionId: number) => {
     if (guest) {
-      Alert.alert('Preview mode', 'Sign in to publish and retry your own posts.');
+      requireAccount('Sign in to publish and retry your own posts.');
       return;
     }
     setRetryError((m) => ({ ...m, [distributionId]: '' }));
@@ -214,7 +215,9 @@ export default function PostDetails() {
                 </View>
                 <AnimatedPressable
                   accessibilityLabel="Play uploaded video"
-                  style={s.play}
+                  accessibilityState={{ disabled: !post.video_url }}
+                  disabled={!post.video_url}
+                  style={[s.play, !post.video_url && { opacity: 0.4 }]}
                   onPress={() => {
                     if (post.video_url) Linking.openURL(post.video_url).catch(() => undefined);
                   }}
@@ -268,6 +271,9 @@ export default function PostDetails() {
               </View>
 
               {dists.length === 0 ? <InlineMessage icon="call-split" text="No target channels for this post." /> : null}
+              {inFlight && post.status !== 'scheduled' ? (
+                <InlineMessage icon="hourglass-empty" text="Publishing may take a few minutes to process on each platform. This page updates automatically." />
+              ) : null}
 
               {dists.map((d) => {
                 const failed = d.status === 'failed';
@@ -340,7 +346,15 @@ export default function PostDetails() {
                             </Animated.View>
                             <Text style={s.retryText}>{busy ? 'Re-queuing…' : 'Retry'}</Text>
                           </AnimatedPressable>
-                          <AnimatedPressable style={s.reauth} onPress={() => router.push('/connect')}>
+                          <AnimatedPressable
+                            style={s.reauth}
+                            onPress={() =>
+                              router.push({
+                                pathname: '/connect',
+                                params: { reauth: d.platform === 'facebook' || d.platform === 'instagram' ? 'meta' : d.platform },
+                              })
+                            }
+                          >
                             <MaterialIcons name="vpn-key" size={16} color={C.text} />
                             <Text style={s.retryText}>Re-authorize</Text>
                           </AnimatedPressable>

@@ -3,11 +3,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Line, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
-import { useIsGuest, useOverview, usePlatformAnalytics, useTimeseries, useTopPosts } from '@/api/hooks';
+import { errorText } from '@/api/client';
+import { useIsGuest, useMe, useOverview, usePlatformAnalytics, useTimeseries, useTopPosts } from '@/api/hooks';
 import type { Metrics, Period, Platform as ApiPlatform } from '@/api/types';
-import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { Sheet, SheetRow } from '@/components/sheet';
+import { AnimatedPressable, InlineMessage, RetryMessage, Skeleton, updatedLabel } from '@/components/ui-kit';
+import { exportAnalyticsCsv } from '@/lib/export';
+import { openNotifications, openProfile, requireAccount } from '@/store/uiStore';
 import { PLATFORM_COLOR, buildChart, metricsShort, shortDate } from '@/components/post-utils';
 import { useRefresh } from '@/hooks/use-refresh';
 import { formatCount, formatWatchTime } from '@/lib/format';
@@ -86,6 +90,13 @@ const CHIP_API: Record<Platform, ApiPlatform | 'all'> = {
 type Kind = 'tt' | 'yt' | 'ig' | 'fb';
 const KIND_API: Record<Kind, ApiPlatform> = { tt: 'tiktok', yt: 'youtube', ig: 'instagram', fb: 'facebook' };
 const ZERO: Metrics = { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, watch_time_seconds: 0 };
+type SortKey = 'views' | 'likes' | 'comments' | 'shares';
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'views', label: 'Views' },
+  { key: 'likes', label: 'Likes' },
+  { key: 'comments', label: 'Comments' },
+  { key: 'shares', label: 'Shares' },
+];
 
 // ---- Small animated pieces ----
 const SPARK_LEN = 130;
@@ -121,8 +132,11 @@ function PlatformDot({ kind }: { kind: Kind }) {
 export default function Insights() {
   const [platform, setPlatform] = useState<Platform>('All Platforms');
   const [periodOpen, setPeriodOpen] = useState(false);
-  const [period, setPeriod] = useState<string>('Last 30 Days');
-  const periodDef = PERIODS.find((p) => p.label === period) ?? PERIODS[0];
+  const [period, setPeriod] = useState<string>('Last 7 Days');
+  const [sortKey, setSortKey] = useState<SortKey>('views');
+  const [sortOpen, setSortOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const periodDef = PERIODS.find((p) => p.label === period) ?? PERIODS[1];
 
   const guest = useIsGuest();
   const apiPlatform = CHIP_API[platform];
@@ -130,7 +144,10 @@ export default function Insights() {
   const platformsQ = usePlatformAnalytics(periodDef.api);
   const seriesQ = useTimeseries(periodDef.api, apiPlatform);
   const topQ = useTopPosts(periodDef.api, 3);
-  const { refreshing, onRefresh } = useRefresh([overviewQ, platformsQ, seriesQ, topQ]);
+  // I4: real TikTok series for the overlay curve (CONTRACT §5.3).
+  const tiktokQ = useTimeseries(periodDef.api, 'tiktok');
+  const me = useMe();
+  const { refreshing, onRefresh } = useRefresh([overviewQ, platformsQ, seriesQ, topQ, tiktokQ, me]);
   const ov = overviewQ.data;
   const ovLoading = overviewQ.isLoading;
   const breakdown = useMemo(() => platformsQ.data?.platforms ?? [], [platformsQ.data?.platforms]);
@@ -153,11 +170,14 @@ export default function Insights() {
   const pct = (n: number) => (split.total > 0 ? Math.round((n / split.total) * 100) : 0);
 
   const primary = useMemo(() => (hasSeries ? buildChart(series, { top: 14, bottom: 140 }) : null), [series, hasSeries]);
-  const ttShare = apiPlatform === 'all' && split.total > 0 && split.tt < split.total ? split.tt / split.total : 0;
-  // Secondary curve is scaled to the same max so it sits under the primary line.
+  // Secondary curve: real TikTok daily views, scaled to the primary max so it sits under the primary line.
+  const ttSeries = useMemo(() => (tiktokQ.data?.points ?? []).map((x) => x.views ?? 0), [tiktokQ.data?.points]);
+  const maxAll = Math.max(1, ...series);
+  const maxTT = Math.max(0, ...ttSeries);
+  const showTT = apiPlatform === 'all' && !!primary && maxTT > 0 && ttSeries.length === series.length;
   const primaryD = primary?.d ?? FLAT_D;
   const primaryAreaD = `${primaryD} L 340 150 L 0 150 Z`;
-  const tiktokD = ttShare > 0 ? buildChart(series.map((v) => v * ttShare), { top: 14 + (1 - ttShare) * 126, bottom: 140 })?.d ?? FLAT_D : FLAT_D;
+  const tiktokD = showTT ? buildChart(ttSeries, { top: 14 + (1 - Math.min(1, maxTT / maxAll)) * 126, bottom: 140 })?.d ?? FLAT_D : FLAT_D;
   const tiktokAreaD = `${tiktokD} L 340 150 L 0 150 Z`;
   const curveLen = primary?.len ?? CURVE_LEN;
   const curveLenSv = useSharedValue(CURVE_LEN);
@@ -182,12 +202,26 @@ export default function Insights() {
     return best;
   }, [primary, axisLabels]);
   const delta = change?.views ?? null;
+  const updated = guest ? '' : ` • ${updatedLabel(me.data?.sync?.last_synced_at)}`;
   const rangeCaption =
     trend.length >= 2
-      ? `${shortDate(trend[0].date)} – ${shortDate(trend[trend.length - 1].date)} • ${periodDef.days} Aggregation`
-      : `${periodDef.days} Aggregation`;
+      ? `${shortDate(trend[0].date)} – ${shortDate(trend[trend.length - 1].date)} • ${periodDef.days} Aggregation${updated}`
+      : `${periodDef.days} Aggregation${updated}`;
 
-  const topClips = useMemo(() => topQ.data ?? [], [topQ.data]);
+  const topClips = useMemo(() => [...(topQ.data ?? [])].sort((a, b) => (b.totals[sortKey] ?? 0) - (a.totals[sortKey] ?? 0)), [topQ.data, sortKey]);
+  const kpiError = apiPlatform === 'all' ? overviewQ.isError && !overviewQ.data : platformsQ.isError && !platformsQ.data;
+
+  async function onExport() {
+    if (!requireAccount('Sign in to export your analytics as CSV.')) return;
+    setExporting(true);
+    try {
+      await exportAnalyticsCsv(periodDef.api);
+    } catch (e) {
+      Alert.alert('Export failed', errorText(e));
+    } finally {
+      setExporting(false);
+    }
+  }
   const kpiValue = (k: (typeof KPI_DEFS)[number]['key']) => formatCount(totals[k] ?? 0);
   const sparkD = (k: (typeof KPI_DEFS)[number]['key']) => {
     const vals = trend.map((x) => x[k] ?? 0);
@@ -237,12 +271,12 @@ export default function Insights() {
             <Text style={s.brandText}>Home</Text>
           </View>
           <View style={s.brand}>
-            <Pressable style={s.bell}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={openNotifications} style={s.bell}>
               <MaterialIcons name="notifications-none" size={22} color={C.muted} />
             </Pressable>
-            <View style={s.avatar}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Profile" onPress={openProfile} style={s.avatar}>
               <MaterialIcons name="person" size={18} color="#31009A" />
-            </View>
+            </Pressable>
           </View>
         </View>
 
@@ -263,8 +297,8 @@ export default function Insights() {
                 <Text style={s.periodText}>{period}</Text>
                 <MaterialIcons name="expand-more" size={18} color={C.muted} />
               </AnimatedPressable>
-              <Pressable style={s.shareBtn}>
-                <MaterialIcons name="ios-share" size={19} color={C.muted} />
+              <Pressable accessibilityRole="button" accessibilityLabel="Export analytics CSV" onPress={onExport} disabled={exporting} style={s.shareBtn}>
+                {exporting ? <ActivityIndicator size="small" color={C.muted} /> : <MaterialIcons name="ios-share" size={19} color={C.muted} />}
               </Pressable>
             </View>
           </View>
@@ -322,6 +356,10 @@ export default function Insights() {
             })}
           </ScrollView>
 
+          {kpiError ? (
+            <RetryMessage onRetry={() => void (apiPlatform === 'all' ? overviewQ.refetch() : platformsQ.refetch())} />
+          ) : null}
+
           {/* Reach chart card */}
           <View style={[s.card, { padding: 16, gap: 12, overflow: 'hidden' }]}>
             <View style={s.glow} />
@@ -344,7 +382,7 @@ export default function Insights() {
             <View style={s.chartBox}>
               {!primary ? (
                 seriesQ.isError && !seriesQ.data ? (
-                  <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" style={s.chartMsg} />
+                  <RetryMessage onRetry={() => void seriesQ.refetch()} style={s.chartMsg} />
                 ) : seriesQ.isLoading ? (
                   <Skeleton height={CHART_H - 20} radius={12} style={s.chartMsg} />
                 ) : (
@@ -520,14 +558,14 @@ export default function Insights() {
                 <Text style={[s.label, { color: C.primary }]}>{topClips.length} Top</Text>
               </View>
             </View>
-            <Pressable style={s.legendHead}>
-              <Text style={[s.label, { color: C.muted }]}>By Views</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Sort top clips" onPress={() => setSortOpen(true)} style={s.legendHead}>
+              <Text style={[s.label, { color: C.muted }]}>By {SORTS.find((x) => x.key === sortKey)?.label ?? 'Views'}</Text>
               <MaterialIcons name="sort" size={16} color={C.muted} />
             </Pressable>
           </View>
 
           {topQ.isError && !topQ.data ? (
-            <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" />
+            <RetryMessage onRetry={() => void topQ.refetch()} />
           ) : topQ.isLoading ? (
             <>
               <Skeleton height={136} radius={16} />
@@ -598,6 +636,20 @@ export default function Insights() {
         </ScrollView>
       </SafeAreaView>
 
+      {/* I3 — sort sheet (client-side) */}
+      <Sheet visible={sortOpen} onClose={() => setSortOpen(false)} title="Sort top clips">
+        {SORTS.map((o) => (
+          <SheetRow
+            key={o.key}
+            label={`By ${o.label}`}
+            selected={sortKey === o.key}
+            onPress={() => {
+              setSortKey(o.key);
+              setSortOpen(false);
+            }}
+          />
+        ))}
+      </Sheet>
     </View>
   );
 }

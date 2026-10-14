@@ -4,14 +4,17 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Fragment, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { errorText } from '@/api/client';
-import { usePosts, useRetryDistribution } from '@/api/hooks';
+import { useDeletePost, useIsGuest, usePosts, useRetryDistribution } from '@/api/hooks';
 import type { Post as ApiPost, Platform, PostFilter, PostStatus } from '@/api/types';
-import { AnimatedPressable, InlineMessage, Skeleton } from '@/components/ui-kit';
+import { AnimatedPressable, InlineMessage, RetryMessage, Skeleton } from '@/components/ui-kit';
+import { Sheet, SheetButton, SheetInput, SheetRow, SheetText } from '@/components/sheet';
+import { PLATFORMS } from '@/api/types';
+import { openNotifications, openProfile, requireAccount } from '@/store/uiStore';
 import { PLATFORM_SHORT, STATUS_LABEL, captionBody, latestAnalytic, postStatus, postTags, shortDate, timeAgo } from '@/components/post-utils';
 import { useRefresh } from '@/hooks/use-refresh';
 import { formatCount } from '@/lib/format';
@@ -117,9 +120,19 @@ const DEST_STYLE: Record<Platform, { icon: MIcon; color: string; bg?: string; gr
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<PostFilter>('all');
-  const listQ = usePosts(filter);
-  const allQ = usePosts('all');
+  const [q, setQ] = useState('');
+  const [qDraft, setQDraft] = useState('');
+  const [platform, setPlatform] = useState<Platform | null>(null);
+  const [sheet, setSheet] = useState<'search' | 'platform' | null>(null);
+  const [actionPost, setActionPost] = useState<ApiPost | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const guest = useIsGuest();
+  const listQ = usePosts(filter, { q, platform });
+  const allQ = usePosts('all', { q, platform });
   const retryM = useRetryDistribution();
+  const deleteM = useDeletePost();
+  const byId = new Map((listQ.data ?? []).map((p) => [p.id, p] as const));
   const { refreshing, onRefresh } = useRefresh([listQ, allQ]);
   const visible = (listQ.data ?? []).map(toCard);
   const allCards = (allQ.data ?? []).map((p) => postStatus(p));
@@ -131,8 +144,28 @@ export default function PostsScreen() {
     failed: allCards.filter((x) => x === 'failed').length,
   };
   const retry = (id: number) => {
+    if (!requireAccount('Sign in to retry publishing your own posts.')) return;
     retryM.mutate(id, { onError: (e) => Alert.alert('Retry failed', errorText(e)) });
   };
+  const closeActions = () => {
+    setActionPost(null);
+    setConfirmDelete(false);
+    setActionError(null);
+  };
+  const sharePost = (p: ApiPost) => {
+    const link = p.distributions.find((d) => d.url)?.url ?? p.video_url;
+    Share.share({ message: link ? `${p.title}\n${link}` : p.title }).catch(() => undefined);
+  };
+  const removePost = (p: ApiPost) => {
+    if (guest) {
+      closeActions();
+      requireAccount('Sign in to manage your own posts.');
+      return;
+    }
+    setActionError(null);
+    deleteM.mutate(p.id, { onSuccess: closeActions, onError: (e) => setActionError(errorText(e)) });
+  };
+  const filterText = [q ? `"${q}"` : '', platform ? PLATFORM_SHORT[platform] : ''].filter(Boolean).join(' • ');
 
   return (
     <View style={s.root}>
@@ -152,10 +185,10 @@ export default function PostsScreen() {
               <Text style={s.screenTitle}>Posts</Text>
             </View>
             <View style={s.headerActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Notifications" style={({ pressed }) => [s.iconBtn, pressed && s.pressSoft]}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={openNotifications} style={({ pressed }) => [s.iconBtn, pressed && s.pressSoft]}>
                 <MaterialIcons name="notifications" size={22} color={C.text} />
               </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Account" style={({ pressed }) => [s.avatar, pressed && s.pressSoft]}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Account" onPress={openProfile} style={({ pressed }) => [s.avatar, pressed && s.pressSoft]}>
                 <MaterialIcons name="person" size={20} color={C.text} />
               </Pressable>
             </View>
@@ -170,10 +203,18 @@ export default function PostsScreen() {
               </View>
             </View>
             <View style={s.subActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Search clips" style={({ pressed }) => [s.iconBtnBordered, pressed && s.pressSoft]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Search clips"
+                onPress={() => {
+                  setQDraft(q);
+                  setSheet('search');
+                }}
+                style={({ pressed }) => [s.iconBtnBordered, pressed && s.pressSoft]}
+              >
                 <MaterialIcons name="search" size={20} color={C.muted} />
               </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Filter channels" style={({ pressed }) => [s.iconBtnBordered, pressed && s.pressSoft]}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Filter channels" onPress={() => setSheet('platform')} style={({ pressed }) => [s.iconBtnBordered, pressed && s.pressSoft]}>
                 <MaterialIcons name="tune" size={20} color={C.muted} />
               </Pressable>
             </View>
@@ -188,21 +229,42 @@ export default function PostsScreen() {
 
           {/* Feed */}
           <View style={s.feed}>
+            {filterText ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Clear search and filter"
+                onPress={() => {
+                  setQ('');
+                  setPlatform(null);
+                }}
+              >
+                <InlineMessage icon="filter-list" text={`Showing ${filterText} — tap to clear`} />
+              </Pressable>
+            ) : null}
             {listQ.isLoading ? (
               <>
                 <Skeleton height={190} radius={20} />
                 <Skeleton height={190} radius={20} />
               </>
             ) : listQ.isError && !listQ.data ? (
-              <InlineMessage tone="danger" icon="cloud-off" text="Couldn't load data" />
+              <RetryMessage onRetry={() => void listQ.refetch()} />
             ) : visible.length === 0 ? (
               <InlineMessage
                 icon="movie"
-                text={filter === 'all' ? 'No posts yet — new clips will appear here.' : 'No clips in this state yet.'}
+                text={filterText ? 'No clips match this search.' : filter === 'all' ? 'No posts yet — new clips will appear here.' : 'No clips in this state yet.'}
               />
             ) : (
               visible.map((post) => (
-                <PostCard key={post.id} post={post} onRetry={retry} retrying={retryM.isPending && retryM.variables === post.failedId} />
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  onRetry={retry}
+                  onMore={() => {
+                    const p = byId.get(post.id);
+                    if (p) setActionPost(p);
+                  }}
+                  retrying={retryM.isPending && retryM.variables === post.failedId}
+                />
               ))
             )}
           </View>
@@ -210,6 +272,132 @@ export default function PostsScreen() {
       </SafeAreaView>
 
       <NewCrossPostFab bottomOffset={insets.bottom + 16} />
+
+      {/* P2 — search */}
+      <Sheet visible={sheet === 'search'} onClose={() => setSheet(null)} title="Search clips" subtitle="Matches titles and captions.">
+        <SheetInput
+          value={qDraft}
+          onChangeText={setQDraft}
+          placeholder="Search by title or caption"
+          autoFocus
+          autoCorrect={false}
+          returnKeyType="search"
+          onSubmitEditing={() => {
+            setQ(qDraft.trim());
+            setSheet(null);
+          }}
+        />
+        <SheetButton
+          tone="primary"
+          icon="search"
+          label="Search"
+          onPress={() => {
+            setQ(qDraft.trim());
+            setSheet(null);
+          }}
+        />
+        {q ? (
+          <SheetButton
+            label="Clear search"
+            onPress={() => {
+              setQ('');
+              setQDraft('');
+              setSheet(null);
+            }}
+          />
+        ) : null}
+      </Sheet>
+
+      {/* P3 — platform filter */}
+      <Sheet visible={sheet === 'platform'} onClose={() => setSheet(null)} title="Filter by channel" subtitle="Show clips sent to one platform.">
+        <SheetRow
+          icon="hub"
+          label="All channels"
+          selected={platform === null}
+          onPress={() => {
+            setPlatform(null);
+            setSheet(null);
+          }}
+        />
+        {PLATFORMS.map((pl) => (
+          <SheetRow
+            key={pl}
+            icon={DEST_STYLE[pl].icon}
+            iconColor={pl === 'instagram' ? C.igMid : DEST_STYLE[pl].color}
+            label={PLATFORM_SHORT[pl]}
+            selected={platform === pl}
+            onPress={() => {
+              setPlatform(pl);
+              setSheet(null);
+            }}
+          />
+        ))}
+      </Sheet>
+
+      {/* P4 / P5 / P-05 — post actions */}
+      <Sheet
+        visible={!!actionPost}
+        onClose={closeActions}
+        title={confirmDelete ? (actionPost?.status === 'scheduled' ? 'Cancel scheduled post?' : 'Delete this post?') : actionPost?.title || 'Post'}
+        subtitle={confirmDelete ? undefined : actionPost ? STATUS_LABEL[actionPost.status] : undefined}
+      >
+        {actionPost && !confirmDelete ? (
+          <>
+            <SheetRow icon="share" label="Share" onPress={() => sharePost(actionPost)} />
+            {actionPost.distributions
+              .filter((d) => d.status === 'published' && d.url)
+              .map((d) => (
+                <SheetRow
+                  key={`open-${d.id}`}
+                  icon="north-east"
+                  label={`Open on ${PLATFORM_SHORT[d.platform]}`}
+                  onPress={() => {
+                    if (d.url) Linking.openURL(d.url).catch(() => undefined);
+                  }}
+                />
+              ))}
+            {actionPost.distributions
+              .filter((d) => d.status === 'failed')
+              .map((d) => (
+                <SheetRow
+                  key={`retry-${d.id}`}
+                  icon="refresh"
+                  label={`Retry ${PLATFORM_SHORT[d.platform]}`}
+                  sub={d.error_message ?? undefined}
+                  disabled={retryM.isPending && retryM.variables === d.id}
+                  onPress={() => {
+                    closeActions();
+                    retry(d.id);
+                  }}
+                />
+              ))}
+            <SheetRow
+              icon={actionPost.status === 'scheduled' ? 'event-busy' : 'delete-outline'}
+              tone="danger"
+              label={actionPost.status === 'scheduled' ? 'Cancel scheduled post' : 'Delete from ClipPipeline'}
+              onPress={() => setConfirmDelete(true)}
+            />
+          </>
+        ) : null}
+        {actionPost && confirmDelete ? (
+          <>
+            <SheetText>
+              {actionPost.status === 'scheduled'
+                ? 'The post will not be published, and its uploaded video is removed from ClipPipeline.'
+                : 'This removes the post, its stats and the uploaded video from ClipPipeline only. It does NOT delete anything already published on YouTube, Facebook, Instagram or TikTok — remove it there separately if you want it gone.'}
+            </SheetText>
+            {actionError ? <InlineMessage tone="danger" icon="error-outline" text={actionError} /> : null}
+            <SheetButton
+              tone="danger"
+              icon="delete-outline"
+              label={actionPost.status === 'scheduled' ? 'Cancel post' : 'Delete post'}
+              loading={deleteM.isPending}
+              onPress={() => removePost(actionPost)}
+            />
+            <SheetButton label="Keep it" onPress={() => setConfirmDelete(false)} />
+          </>
+        ) : null}
+      </Sheet>
     </View>
   );
 }
@@ -231,7 +419,7 @@ function FilterChip({ label, count, active, onPress }: { label: string; count: n
   );
 }
 
-function PostCard({ post, onRetry, retrying }: { post: Post; onRetry: (distributionId: number) => void; retrying: boolean }) {
+function PostCard({ post, onRetry, onMore, retrying }: { post: Post; onRetry: (distributionId: number) => void; onMore: () => void; retrying: boolean }) {
   const processing = post.status === 'processing';
 
   return (
@@ -252,7 +440,7 @@ function PostCard({ post, onRetry, retrying }: { post: Post; onRetry: (distribut
                 {post.meta}
               </Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="More options" hitSlop={8} style={s.moreBtn}>
+            <Pressable accessibilityRole="button" accessibilityLabel="More options" hitSlop={8} onPress={onMore} style={s.moreBtn}>
               <MaterialIcons name="more-horiz" size={20} color={C.muted} />
             </Pressable>
           </View>
@@ -491,7 +679,7 @@ function NewCrossPostFab({ bottomOffset }: { bottomOffset: number }) {
   return (
     <View style={[s.fabWrap, { bottom: bottomOffset }]}>
       <Animated.View style={[s.fabGlow, glowStyle]} />
-      <AnimatedPressable accessibilityRole="button" accessibilityLabel="New cross-post" style={s.fab} onPress={() => router.push('/post/new')}>
+      <AnimatedPressable accessibilityRole="button" accessibilityLabel="New cross-post" style={s.fab} onPress={() => requireAccount('Sign in to upload a video and publish it to your channels.') && router.push('/post/new')}>
         <LinearGradient colors={[C.violet, C.violetEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[StyleSheet.absoluteFill, s.fabFill]} />
         <MaterialIcons name="add" size={20} color={C.text} />
         <Text style={s.fabText}>New cross-post</Text>

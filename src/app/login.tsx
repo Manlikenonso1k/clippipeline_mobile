@@ -1,13 +1,15 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
-import * as AuthSession from 'expo-auth-session';
-import * as Linking from 'expo-linking';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { apiFetch, ApiError } from '@/api/client';
+import { apiFetch, ApiError, errorText } from '@/api/client';
+import { useFlags } from '@/api/hooks';
+import type { LoginProvider } from '@/api/types';
+import { signInWithProvider } from '@/lib/session';
 import { useAuthStore } from '@/store/authStore';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -35,123 +37,35 @@ const C = {
   google: '#4285F4',
 } as const;
 
-type Provider = 'google' | 'facebook' | 'tiktok';
-
-const redirectUri = AuthSession.makeRedirectUri({
-  scheme: 'clippipelinemobile',
-  path: 'oauth',
-});
-
-const facebookDiscovery: AuthSession.DiscoveryDocument = {
-  authorizationEndpoint: 'https://www.facebook.com/v19.0/dialog/oauth',
-  tokenEndpoint: 'https://graph.facebook.com/v19.0/oauth/access_token',
-};
+type Provider = LoginProvider;
+const PROVIDER_NAME: Record<Provider, string> = { google: 'Google', facebook: 'Facebook', tiktok: 'TikTok' };
+const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
 
 export default function LoginScreen() {
   const setToken = useAuthStore((state) => state.setToken);
+  const flags = useFlags();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Provider | 'email' | null>(null);
   const [emailMode, setEmailMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
-  const facebookClientId = process.env.EXPO_PUBLIC_FACEBOOK_CLIENT_ID;
-  const tiktokClientKey = process.env.EXPO_PUBLIC_TIKTOK_CLIENT_KEY;
-
-  const googleDiscovery = AuthSession.useAutoDiscovery('https://accounts.google.com');
-  const [googleRequest, , googlePrompt] = AuthSession.useAuthRequest(
-    {
-      clientId: googleClientId ?? '',
-      responseType: AuthSession.ResponseType.Code,
-      scopes: ['openid', 'profile', 'email'],
-      redirectUri,
-      usePKCE: true,
-    },
-    googleDiscovery,
-  );
-
-  const [facebookRequest, , facebookPrompt] = AuthSession.useAuthRequest(
-    {
-      clientId: facebookClientId ?? '',
-      responseType: AuthSession.ResponseType.Code,
-      scopes: ['public_profile', 'email'],
-      redirectUri,
-    },
-    facebookDiscovery,
-  );
-
-  // Exchange a provider authorization code for our own app token via the Laravel API.
-  async function exchange(provider: Provider, code: string) {
-    const data = await apiFetch<{ token: string }>(`/auth/${provider}/token`, {
-      method: 'POST',
-      body: JSON.stringify({ code, redirect_uri: redirectUri }),
-    });
-    await setToken(data.token);
-    router.replace('/dashboard');
-  }
-
-  async function signInGoogle() {
+  // §9 broker: GET /auth/{provider}/start → browser → clippipelinemobile://auth?code= → POST /auth/exchange.
+  async function signIn(provider: Provider) {
     setError(null);
-    if (!googleClientId) return setError('Google sign-in is not configured for this build.');
-    setBusy('google');
+    setBusy(provider);
     try {
-      const result = await googlePrompt();
-      if (result.type !== 'success' || !result.params.code) {
-        if (result.type !== 'dismiss' && result.type !== 'cancel') setError('Google sign-in did not return an authorization code.');
-        return;
-      }
-      await exchange('google', result.params.code);
+      if (await signInWithProvider(provider)) router.replace('/dashboard');
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Unable to sign in with Google.');
+      setError(errorText(cause) || `Unable to sign in with ${PROVIDER_NAME[provider]}.`);
     } finally {
       setBusy(null);
     }
   }
-
-  async function signInFacebook() {
-    setError(null);
-    if (!facebookClientId) return setError('Facebook sign-in is not configured for this build.');
-    setBusy('facebook');
-    try {
-      const result = await facebookPrompt();
-      if (result.type !== 'success' || !result.params.code) {
-        if (result.type !== 'dismiss' && result.type !== 'cancel') setError('Facebook sign-in did not return an authorization code.');
-        return;
-      }
-      await exchange('facebook', result.params.code);
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Unable to sign in with Facebook.');
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  // TikTok v2 uses `client_key` (not client_id) and comma-separated scopes, so we
-  // drive it directly instead of through useAuthRequest.
-  async function signInTikTok() {
-    setError(null);
-    if (!tiktokClientKey) return setError('TikTok sign-in is not configured for this build.');
-    setBusy('tiktok');
-    try {
-      const state = Math.random().toString(36).slice(2);
-      const authUrl =
-        'https://www.tiktok.com/v2/auth/authorize/' +
-        `?client_key=${encodeURIComponent(tiktokClientKey)}` +
-        '&scope=user.info.basic&response_type=code' +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-      if (result.type !== 'success' || !result.url) return;
-      const { queryParams } = Linking.parse(result.url);
-      const code = typeof queryParams?.code === 'string' ? queryParams.code : null;
-      if (!code) return setError('TikTok sign-in did not return an authorization code.');
-      await exchange('tiktok', code);
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Unable to sign in with TikTok.');
-    } finally {
-      setBusy(null);
-    }
-  }
+  const signInGoogle = () => signIn('google');
+  const signInFacebook = () => signIn('facebook');
+  const signInTikTok = () => signIn('tiktok');
+  const openLegal = (url: string) => WebBrowser.openBrowserAsync(url).catch(() => undefined);
 
   async function signInEmail() {
     setError(null);
@@ -171,7 +85,7 @@ export default function LoginScreen() {
     }
   }
 
-  const googleDisabled = !googleRequest || busy !== null;
+  const googleDisabled = busy !== null;
   const otherDisabled = busy !== null;
 
   return (
@@ -190,7 +104,7 @@ export default function LoginScreen() {
           </Pressable>
           <View style={s.versionPill}>
             <View style={s.versionDot} />
-            <Text style={s.versionText}>v2.4 Active</Text>
+            <Text style={s.versionText}>v{APP_VERSION}</Text>
           </View>
         </View>
 
@@ -268,9 +182,9 @@ export default function LoginScreen() {
 
           <Pressable
             accessibilityRole="button"
-            disabled={otherDisabled || !facebookRequest}
+            disabled={otherDisabled}
             onPress={signInFacebook}
-            style={({ pressed }) => [s.authBtn, s.facebookBtn, pressed && s.pressed, (otherDisabled || !facebookRequest) && s.disabled]}
+            style={({ pressed }) => [s.authBtn, s.facebookBtn, pressed && s.pressed, otherDisabled && s.disabled]}
           >
             {busy === 'facebook' ? (
               <ActivityIndicator color={C.text} style={s.authIcon} />
@@ -369,8 +283,15 @@ export default function LoginScreen() {
         {/* Legal footer */}
         <View style={s.footer}>
           <Text style={s.legal}>
-            By continuing, you agree to ClipPipeline&apos;s <Text style={s.link}>Terms of Service</Text> and{' '}
-            <Text style={s.link}>Privacy Policy</Text>.
+            By continuing, you agree to ClipPipeline&apos;s{' '}
+            <Text accessibilityRole="link" style={s.link} onPress={() => openLegal(flags.terms_url)}>
+              Terms of Service
+            </Text>{' '}
+            and{' '}
+            <Text accessibilityRole="link" style={s.link} onPress={() => openLegal(flags.privacy_url)}>
+              Privacy Policy
+            </Text>
+            .
           </Text>
         </View>
       </ScrollView>

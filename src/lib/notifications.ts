@@ -84,6 +84,32 @@ export async function syncPushTokenToBackend(): Promise<void> {
   }
 }
 
+/** This device's Expo push token without prompting (null when not granted). */
+async function currentPushToken(): Promise<string | null> {
+  try {
+    if (!Device.isDevice) return null;
+    const perm = await Notifications.getPermissionsAsync();
+    if (!perm.granted) return null;
+    const projectId: string | undefined =
+      Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    const token = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+    return token.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// DELETE /device-tokens {token} — call while the auth token is still set (sign-out, push toggle off).
+export async function unregisterPushTokenFromBackend(): Promise<void> {
+  try {
+    const token = await currentPushToken();
+    if (!token) return;
+    await apiFetch('/device-tokens', { method: 'DELETE', body: JSON.stringify({ token }) });
+  } catch {
+    // ignore — best-effort
+  }
+}
+
 // Fire a one-time "welcome" LOCAL notification on first launch — needs no
 // login, no server, no FCM. Just proves notifications work and greets the user.
 export async function maybeSendWelcomeNotification(): Promise<void> {
