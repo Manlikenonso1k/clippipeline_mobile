@@ -212,9 +212,9 @@ export default function Dashboard() {
 
         {/* Metrics */}
         <View style={s.grid}>
-          <Stat label="Total Views" badge={deltaBadge} value={formatCount(overview?.totals.views ?? 0)} unit="views" loading={ovLoading} />
-          <Stat label="Total Likes" value={formatCount(overview?.totals.likes ?? 0)} unit="likes" loading={ovLoading} />
-          <Stat label="Published" icon="electric-bolt" value={formatCount(overview?.posts_published ?? 0)} unit="clips" loading={ovLoading} />
+          <Stat label="Total Views" badge={deltaBadge} value={formatCount(overview?.totals.views ?? 0)} unit={`views · ${range}`} loading={ovLoading} />
+          <Stat label="Total Likes" value={formatCount(overview?.totals.likes ?? 0)} unit={`likes · ${range}`} loading={ovLoading} />
+          <Stat label="Published" icon="electric-bolt" value={formatCount(overview?.posts_published ?? 0)} unit={`clips · ${range}`} loading={ovLoading} />
           <Stat label="Connected" value={`${connectedCount} of 4`} unit="channels" loading={ovLoading && accountsQ.isLoading}>
             <View style={s.dots}>
               {(['youtube', 'facebook', 'instagram', 'tiktok'] as Platform[]).map((pl, i) => {

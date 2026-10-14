@@ -9,7 +9,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTim
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { errorText } from '@/api/client';
-import { useDeletePost, useIsGuest, usePosts, useRetryDistribution } from '@/api/hooks';
+import { useDeletePost, useIsGuest, useMe, usePosts, useRetryDistribution } from '@/api/hooks';
 import type { Post as ApiPost, Platform, PostFilter, PostStatus } from '@/api/types';
 import { AnimatedPressable, InlineMessage, RetryMessage, Skeleton } from '@/components/ui-kit';
 import { Sheet, SheetButton, SheetInput, SheetRow, SheetText } from '@/components/sheet';
@@ -128,6 +128,7 @@ export default function PostsScreen() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const guest = useIsGuest();
+  const avatarUri = useMe().data?.user?.avatar ?? null;
   const listQ = usePosts(filter, { q, platform });
   const allQ = usePosts('all', { q, platform });
   const retryM = useRetryDistribution();
@@ -141,7 +142,7 @@ export default function PostsScreen() {
     published: allCards.filter((x) => x === 'published').length,
     processing: allCards.filter((x) => x === 'processing').length,
     scheduled: allCards.filter((x) => x === 'scheduled').length,
-    failed: allCards.filter((x) => x === 'failed').length,
+    failed: allCards.filter((x) => x === 'failed' || x === 'partial').length,
   };
   const retry = (id: number) => {
     if (!requireAccount('Sign in to retry publishing your own posts.')) return;
@@ -189,7 +190,7 @@ export default function PostsScreen() {
                 <MaterialIcons name="notifications" size={22} color={C.text} />
               </Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel="Account" onPress={openProfile} style={({ pressed }) => [s.avatar, pressed && s.pressSoft]}>
-                <MaterialIcons name="person" size={20} color={C.text} />
+                {avatarUri ? <Image source={{ uri: avatarUri }} style={s.avatar} /> : <MaterialIcons name="person" size={20} color={C.text} />}
               </Pressable>
             </View>
           </View>

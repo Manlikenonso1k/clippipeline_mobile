@@ -119,11 +119,11 @@ export default function ProfileScreen() {
   const used = plan?.clips_used ?? 0;
   const limit = plan?.clips_limit ?? null;
   const usedPct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-  const billingUrl = plan?.billing_url || `${WEB_BASE_URL}/billing`;
+  const billingUrl = plan?.billing_url || `${WEB_BASE_URL}/#pricing`;
   const statsLoading = overviewQ.isLoading;
   const stats = [
-    { label: 'Syndicated', value: formatCount(ov?.posts_published ?? 0) },
-    { label: 'Total Views', value: formatCount(ov?.totals.views ?? 0), accent: true },
+    { label: 'Syndicated · 30d', value: formatCount(ov?.posts_published ?? 0) },
+    { label: 'Views · 30d', value: formatCount(ov?.totals.views ?? 0), accent: true },
     { label: 'Platforms', value: String(connectedCount), sync: true },
   ] as const;
   const accountNames = connected.length

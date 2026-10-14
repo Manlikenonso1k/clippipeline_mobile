@@ -228,7 +228,9 @@ export default function Insights() {
     if (!vals.some((v) => v > 0)) return SPARK_FLAT;
     return buildChart(vals, { w: 100, top: 3, bottom: 26 })?.d ?? SPARK_FLAT;
   };
-  const boostMult = apiPlatform === 'all' && split.tt > 0 && split.total > split.tt ? split.total / split.tt : null;
+  // COMPLIANCE A-07: no ratios derived from YouTube data — the boost is a ClipPipeline estimate over TikTok, Facebook and Instagram only.
+  const metaViews = split.ig + split.fb;
+  const boostMult = apiPlatform === 'all' && split.tt > 0 && metaViews > 0 ? (split.tt + metaViews) / split.tt : null;
   const avgWatch = totals.views > 0 && totals.watch_time_seconds > 0 ? formatWatchTime(totals.watch_time_seconds / totals.views) : '—';
 
   const chart = useSharedValue(0);
@@ -275,7 +277,7 @@ export default function Insights() {
               <MaterialIcons name="notifications-none" size={22} color={C.muted} />
             </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="Profile" onPress={openProfile} style={s.avatar}>
-              <MaterialIcons name="person" size={18} color="#31009A" />
+              {me.data?.user?.avatar ? <Image source={{ uri: me.data.user.avatar }} style={s.avatar} /> : <MaterialIcons name="person" size={18} color="#31009A" />}
             </Pressable>
           </View>
         </View>
@@ -492,7 +494,7 @@ export default function Insights() {
                   </View>
                 </View>
                 <Text style={[s.caption, { marginTop: 2 }]} numberOfLines={1}>
-                  Cross-posting added {formatCount(split.total - split.tt)} views beyond TikTok.
+                  Est. +{formatCount(metaViews)} views on FB/IG beyond TikTok (excl. YouTube).
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={C.muted} />

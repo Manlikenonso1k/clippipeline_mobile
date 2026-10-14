@@ -67,7 +67,7 @@ function changeOf(cur: Metrics, prev: Metrics): MetricsChange {
 export const DEMO_ME: Me = {
   user: { id: 1, name: 'Alex Rivera', email: 'alex@clippipeline.app', avatar: null },
   server_time: new Date(now).toISOString(),
-  plan: { name: 'free', clips_used: 3, clips_limit: 5, renews_at: null, billing_url: `${WEB_BASE_URL}/billing` },
+  plan: { name: 'free', clips_used: 3, clips_limit: 5, renews_at: null, billing_url: `${WEB_BASE_URL}/#pricing` },
   sync: { status: 'active', last_synced_at: iso(0.05) },
   preferences: { notifications_enabled: true, auto_sync: true, default_platforms: [], default_hashtags: [] },
   flags: { ...FALLBACK_FLAGS },
@@ -202,7 +202,7 @@ export function demoPosts(filter: PostFilter | string, q = '', platform: Platfor
   const needle = q.trim().toLowerCase();
   return DEMO_POSTS.filter(
     (p) =>
-      (filter === 'all' || !filter || p.status === filter) &&
+      (filter === 'all' || !filter || p.status === filter || (filter === 'failed' && p.status === 'partial')) &&
       (!needle || `${p.title} ${p.caption ?? ''}`.toLowerCase().includes(needle)) &&
       (!platform || p.distributions.some((d) => d.platform === platform)),
   );

@@ -5,7 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { errorText } from '@/api/client';
 import { useConnectStart, useDeleteAccount, useFlags, useIsGuest, useMe, useSocialAccounts } from '@/api/hooks';
 import type { ConnectProvider, Platform, SocialAccount } from '@/api/types';
@@ -145,7 +145,9 @@ export default function ConnectScreen() {
   const handledLink = useRef<string | null>(null);
   const refetchAccounts = accountsQ.refetch;
   const flags = useFlags();
-  const prefs = useMe().data?.preferences;
+  const meQ = useMe();
+  const prefs = meQ.data?.preferences;
+  const avatarUri = meQ.data?.user?.avatar ?? null;
   const openUrl = (url: string) => WebBrowser.openBrowserAsync(url).catch(() => undefined);
   const pipelineRules = [
     {
@@ -267,7 +269,7 @@ export default function ConnectScreen() {
         </View>
         <View style={s.topActions}>
           <Pressable accessibilityRole="button" accessibilityLabel="Profile" onPress={openProfile} style={s.avatar}>
-            <MaterialIcons name="person" size={18} color={C.onPrimary} />
+            {avatarUri ? <Image source={{ uri: avatarUri }} style={s.avatar} /> : <MaterialIcons name="person" size={18} color={C.onPrimary} />}
           </Pressable>
         </View>
       </View>
