@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -143,6 +144,17 @@ function formatBytes(n: number | null): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function ClipPreview({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = false;
+  });
+  return (
+    <View style={{ height: 220, borderRadius: 16, overflow: 'hidden', backgroundColor: '#000' }}>
+      <VideoView player={player} style={{ flex: 1 }} contentFit="contain" nativeControls accessibilityLabel="Preview of the selected clip" />
+    </View>
+  );
+}
+
 export default function NewPostScreen() {
   const guest = useIsGuest();
   const accountsQ = useSocialAccounts();
@@ -200,6 +212,9 @@ export default function NewPostScreen() {
   const durationSec = video?.duration != null ? video.duration / 1000 : null;
   const issues = durationIssues(chosen, durationSec, video?.size ?? null, ttOn ? creator?.max_video_post_duration_sec ?? null : null);
   const ttMissingPrivacy = ttOn && !ttPrivacyValue;
+  // TikTok content-sharing guidelines: disclosure ON with neither option ticked disables Publish.
+  const ttDisclosureIncomplete = ttOn && ttDisclose && !ttYourBrand && !ttBranded;
+  const publishBlocked = ttMissingPrivacy || ttDisclosureIncomplete;
   const scheduledAt = scheduleOn ? parseLocal(date, time) : null;
   const uploading = create.isPending;
   const pct = Math.round(create.progress * 100);
@@ -370,6 +385,8 @@ export default function NewPostScreen() {
             </View>
             <Text style={s.link}>{video ? 'Change' : 'Browse'}</Text>
           </AnimatedPressable>
+
+          {video ? <ClipPreview uri={video.uri} /> : null}
 
           {/* Details */}
           <View style={s.card}>
@@ -763,9 +780,9 @@ export default function NewPostScreen() {
           accessibilityRole="button"
           accessibilityLabel={scheduleOn ? 'Schedule post' : 'Publish now'}
           accessibilityState={{ busy: uploading, disabled: uploading }}
-          style={[s.cta, (uploading || guest || ttMissingPrivacy) && s.ctaDisabled]}
+          style={[s.cta, (uploading || guest || publishBlocked) && s.ctaDisabled]}
           onPress={review}
-          disabled={uploading || ttMissingPrivacy}
+          disabled={uploading || publishBlocked}
         >
           <LinearGradient colors={[C.violet, C.violetEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
           {uploading ? <ActivityIndicator color={C.text} /> : <MaterialIcons name={scheduleOn ? 'schedule-send' : 'rocket-launch'} size={20} color={C.text} />}

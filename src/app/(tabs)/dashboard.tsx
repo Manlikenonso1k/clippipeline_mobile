@@ -35,6 +35,7 @@ const C = {
 } as const;
 
 const ranges = ['7d', '30d', '90d'] as const;
+const RANGE_LABEL = { '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days' } as const;
 
 // Chart geometry: the design's 340x160 viewBox. Path is generated from overview.trend;
 // FALLBACK_D (the design's curve shape) is only a flat placeholder when there is no trend data.
@@ -231,7 +232,7 @@ export default function Dashboard() {
           <View style={s.perfHead}>
             <View style={s.flex}>
               <Text style={s.h2}>Performance</Text>
-              <Text style={s.caption}>Aggregated multi-platform reach{guest ? '' : ` • ${updatedLabel(me.data?.sync?.last_synced_at)}`}</Text>
+              <Text style={s.caption}>{RANGE_LABEL[range]} • Aggregated multi-platform reach{guest ? '' : ` • ${updatedLabel(me.data?.sync?.last_synced_at)}`}</Text>
             </View>
             <View style={s.toggle}>
               {ranges.map((r) => (
