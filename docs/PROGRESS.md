@@ -23,6 +23,22 @@ Branch `feat/parity` pushed in both repos. NOT merged into main / feat/app-scree
 4. Bump app.json versionCode to 11; `npx eas-cli login` first (this PC is logged out), then the preview build. New native modules (expo-sharing, expo-file-system) need it.
 5. Update HANDOFF.md and write the final report.
 
+## Resumed 2026-10-21 (this PC = Tenstrings/DESKTOP)
+- Synced this machine to `feat/parity` (`f393275`). Ran `npm install` — the new native deps
+  (expo-image-picker, expo-sharing, expo-file-system) were missing here; now installed.
+- Re-verified gates on this PC: `npx tsc --noEmit` = 0 errors, `npx expo lint` = 0 errors (2 warnings). `package-lock.json` stays gitignored.
+- Confirmed the mobile Google/FB/TikTok login is the §9 **broker**: `signInWithProvider()` (src/lib/session.ts) →
+  `GET /auth/{provider}/start` → browser → `clippipelinemobile://auth?code=` → `POST /auth/exchange`.
+  Backend `AuthBrokerController`. No new redirect URI. **Needs backend feat/parity DEPLOYED + a build ≥11 to work on device.**
+- Bumped versionCode → 11, pushed `feat/parity`, triggered EAS preview build `3506d8aa-0a79-4008-808e-eb339ad5f46c`.
+
+### Still to do (unchanged, minus the build which is now running)
+1. Finish QA (USER-SIM item 5: video preview before publish + Publish-disabled logic; Cross-Post Boost A-07; period labels; verify the partial QA edits; remove remaining markTestIncomplete).
+2. QA deliverables: PARITY.md "QA" column, docs/COMPLIANCE_QA.md, docs/CLICK_TEST.md, UI-freeze diff check.
+3. **DEPLOY backend `feat/parity`** on the server (it currently runs `main`, so the broker + new parity endpoints are NOT live — logged-in mobile features and Google login won't work until deployed). Server: git pull the branch, `composer install --no-dev`, `migrate --force`, `optimize:clear`.
+4. Merge `feat/parity` → integration branch in both repos + push. ⚠️ HELD — owner is cautious about branches; get an explicit go-ahead before merging/pushing to main/master.
+5. Update HANDOFF.md + final report (incl. NONSO_CHECKLIST console steps + demo-video shot lists).
+
 ## Owner decisions pending
 - `/admin` limited to is_admin users (User::canAccessPanel) — regular users get 403 until opened or promoted with app:make-admin.
 - TiktokInsights Filament page still shows placeholder data (now last in nav).
