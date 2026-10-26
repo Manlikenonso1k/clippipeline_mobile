@@ -15,3 +15,5 @@
 Gates: `npx tsc --noEmit` 0 errors; `npx expo lint` 0 errors (2 BOM warnings in untouched files).
 
 Not finished: nothing blocked. The preview was not checked on a device (needs a dev build).
+
+P-02 done: YouTube >180s warning and Instagram >=300 MB message in src/app/post/new.tsx:97,103; size falls back to expo-file-system File.size (line ~253) when the picker gives none.

@@ -1,6 +1,7 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
+import { File as FSFile } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -94,13 +95,13 @@ function durationIssues(
   if (seconds != null) {
     if (platforms.includes('facebook') && (seconds < 3 || seconds > 90)) block.push('Facebook Reels must be 3–90 seconds long.');
     if (platforms.includes('instagram') && (seconds < 3 || seconds > 900)) block.push('Instagram Reels must be between 3 seconds and 15 minutes.');
-    if (platforms.includes('youtube') && seconds > 180) warn.push('YouTube Shorts can be up to 3 minutes; longer videos upload as regular videos.');
+    if (platforms.includes('youtube') && seconds > 180) warn.push('YouTube Shorts must be 180 seconds or less.');
     if (platforms.includes('tiktok') && tiktokMax && seconds > tiktokMax) {
       block.push(`Your TikTok account allows videos up to ${formatWatchTime(tiktokMax)}; this one is ${formatWatchTime(seconds)}.`);
     }
   }
   if (bytes != null) {
-    if (platforms.includes('instagram') && bytes > 300 * 1024 * 1024) block.push('Instagram Reels must be 300 MB or smaller.');
+    if (platforms.includes('instagram') && bytes >= 300 * 1024 * 1024) block.push('Instagram Reels must be under 300 MB.');
     if (platforms.includes('tiktok') && bytes > 4 * 1024 * 1024 * 1024) block.push('TikTok videos must be 4 GB or smaller.');
   }
   return { block, warn };
@@ -250,7 +251,15 @@ export default function NewPostScreen() {
         setError('Pick an MP4, MOV or WebM video.');
         return;
       }
-      setVideo({ uri: a.uri, name, type, size: a.fileSize ?? null, duration: a.duration ?? null });
+      let size = a.fileSize ?? null;
+      if (size == null) {
+        try {
+          size = new FSFile(a.uri).size ?? null; // SDK 57 File API (getInfoAsync is legacy-only)
+        } catch {
+          size = null;
+        }
+      }
+      setVideo({ uri: a.uri, name, type, size, duration: a.duration ?? null });
       if (!title) setTitle(name.replace(/\.[^.]+$/, '').slice(0, MAX_TITLE));
     } catch (e) {
       setError(errorText(e));
