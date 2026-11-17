@@ -53,10 +53,12 @@ export default function RootLayout() {
     // Tap-to-open: refresh, then route to the relevant screen from the payload.
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as
-        | { type?: string; screen?: string; postId?: number | string }
+        | { type?: string; screen?: string; postId?: number | string; project_id?: number | string }
         | undefined;
       invalidateForPush(data);
-      if (data?.screen === 'post' && data.postId != null) {
+      if (data?.type === 'studio' && data.project_id != null) {
+        router.push({ pathname: '/studio/[id]', params: { id: String(data.project_id) } });
+      } else if (data?.screen === 'post' && data.postId != null) {
         router.push({ pathname: '/post/[id]', params: { id: String(data.postId) } });
       } else if (data?.screen === 'connect') {
         router.push('/connect');
@@ -83,6 +85,10 @@ export default function RootLayout() {
           <Stack.Screen name="post/new" />
           <Stack.Screen name="post/[id]" />
           <Stack.Screen name="auth" />
+          <Stack.Screen name="studio/new" />
+          <Stack.Screen name="studio/[id]" />
+          <Stack.Screen name="studio/templates" />
+          <Stack.Screen name="studio/render/[id]" />
         </Stack>
         <GlobalSheets />
       </ThemeProvider>

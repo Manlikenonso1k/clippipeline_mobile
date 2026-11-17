@@ -14,8 +14,29 @@ import {
   demoPosts,
   demoTimeseries,
   demoTopPosts,
+  DEMO_STUDIO_PROJECTS,
+  demoStudioProject,
+  demoStudioRenders,
+  demoTemplate,
+  demoTemplates,
 } from './demo';
 import type {
+  Aspect,
+  AssetRole,
+  AutoCutOptions,
+  CrossPostRenderInput,
+  Edl,
+  EdlTheme,
+  StudioAsset,
+  StudioJob,
+  StudioJobStatus,
+  StudioProject,
+  StudioProjectDetail,
+  StudioRender,
+  StudioTemplate,
+  StudioTemplatesResponse,
+  StudioUsage,
+  TemplateKind,
   AnalyticsOverview,
   AnalyticsPlatforms,
   AnalyticsTimeseries,
@@ -63,6 +84,16 @@ export const keys = {
   timeseries: (period: Period, platform: string) => ['analytics', 'timeseries', period, platform] as const,
   topPosts: (period: Period, limit: number) => ['analytics', 'top-posts', period, limit] as const,
   postAnalytics: (id: number) => ['analytics', 'post', id] as const,
+  // §17 Studio
+  studio: ['studio'] as const,
+  studioProjects: ['studio', 'projects'] as const,
+  studioProject: (id: number) => ['studio', 'project', id] as const,
+  studioRenders: (id: number) => ['studio', 'renders', id] as const,
+  studioJob: (id: string) => ['studio', 'job', id] as const,
+  studioTemplates: (q: string) => ['studio', 'templates', q] as const,
+  studioTemplate: (slug: string) => ['studio', 'template', slug] as const,
+  studioTranscript: (id: number) => ['studio', 'transcript', id] as const,
+  studioUsage: ['studio', 'usage'] as const,
 };
 
 export const IN_FLIGHT: DistributionStatus[] = ['queued', 'uploading', 'processing'];
@@ -427,14 +458,277 @@ export function useRetryDistribution() {
 }
 
 /** Invalidation for push payloads (CONTRACT §7). */
-export function invalidateForPush(data: { type?: string; postId?: number | string } | undefined) {
+export function invalidateForPush(data: { type?: string; postId?: number | string; project_id?: number | string } | undefined) {
   if (!data?.type) return;
   if (data.type === 'distribution_published' || data.type === 'distribution_failed') {
     queryClient.invalidateQueries({ queryKey: keys.postsAll });
     if (data.postId != null) queryClient.invalidateQueries({ queryKey: keys.post(Number(data.postId)) });
     queryClient.invalidateQueries({ queryKey: keys.analytics });
+  } else if (data.type === 'studio') {
+    queryClient.invalidateQueries({ queryKey: keys.studio });
   } else if (data.type === 'account_needs_reauth') {
     queryClient.invalidateQueries({ queryKey: keys.accounts });
   }
   queryClient.invalidateQueries({ queryKey: keys.notifications });
+}
+
+// ---------------- §17 Studio ----------------
+
+const STUDIO_ACTIVE: StudioJobStatus[] = ['queued', 'running'];
+
+/** True while anything in the project is still being processed on the server. */
+export function isProjectBusy(p: StudioProjectDetail | undefined): boolean {
+  if (!p) return false;
+  return p.active_jobs.length > 0 || p.assets.some((a) => a.status === 'pending' || a.status === 'fetching' || a.status === 'processing');
+}
+
+// GET /studio/projects
+export function useStudioProjects() {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: keys.studioProjects,
+    queryFn: () => apiFetch<StudioProject[]>('/studio/projects'),
+    enabled: !!token,
+    placeholderData: token ? undefined : DEMO_STUDIO_PROJECTS,
+  });
+}
+
+// GET /studio/projects/{id} — polls every 3 s while assets or jobs are in flight.
+export function useStudioProject(id: number) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: keys.studioProject(id),
+    queryFn: () => apiFetch<StudioProjectDetail>(`/studio/projects/${id}`),
+    enabled: !!token && Number.isFinite(id),
+    placeholderData: token ? undefined : demoStudioProject(id),
+    refetchInterval: (q) => (token && isProjectBusy(q.state.data) ? 3_000 : false),
+  });
+}
+
+// GET /studio/projects/{id}/renders
+export function useStudioRenders(projectId: number) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: keys.studioRenders(projectId),
+    queryFn: () => apiFetch<StudioRender[]>(`/studio/projects/${projectId}/renders`),
+    enabled: !!token && Number.isFinite(projectId),
+    placeholderData: token ? undefined : demoStudioRenders(projectId),
+  });
+}
+
+// GET /studio/jobs/{id} — polls every 3 s until finished.
+export function useStudioJob(id: string | null) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: keys.studioJob(id ?? ''),
+    queryFn: () => apiFetch<StudioJob>(`/studio/jobs/${id}`),
+    enabled: !!token && !!id,
+    refetchInterval: (q) => (q.state.data && !STUDIO_ACTIVE.includes(q.state.data.status) ? false : 3_000),
+  });
+}
+
+// GET /studio/templates (public). Falls back to the bundled demo catalogue when the
+// server has no Studio yet or the device is offline, so the gallery always works.
+export function useStudioTemplates(params: { category?: string | null; kind?: TemplateKind | null; aspect?: Aspect | null; sort?: 'popular' | 'new' } = {}) {
+  const qs = new URLSearchParams();
+  if (params.category) qs.set('category', params.category);
+  if (params.kind) qs.set('kind', params.kind);
+  if (params.aspect) qs.set('aspect', params.aspect);
+  qs.set('sort', params.sort ?? 'popular');
+  const query = qs.toString();
+  return useQuery({
+    queryKey: keys.studioTemplates(query),
+    queryFn: async () => {
+      try {
+        const res = await apiFetch<StudioTemplatesResponse>(`/studio/templates?${query}`);
+        return res.total > 0 ? { ...res, demo: false } : { ...demoTemplates(params), demo: true };
+      } catch {
+        return { ...demoTemplates(params), demo: true };
+      }
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60_000,
+  });
+}
+
+// GET /studio/templates/{slug}
+export function useStudioTemplate(slug: string | null) {
+  return useQuery({
+    queryKey: keys.studioTemplate(slug ?? ''),
+    queryFn: async () => {
+      try {
+        return await apiFetch<StudioTemplate>(`/studio/templates/${slug}`);
+      } catch (e) {
+        const demo = demoTemplate(slug ?? '');
+        if (demo) return demo;
+        throw e;
+      }
+    },
+    enabled: !!slug,
+    staleTime: 5 * 60_000,
+  });
+}
+
+// GET /studio/assets/{id}/transcript
+export function useStudioTranscript(assetId: number | null) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: keys.studioTranscript(assetId ?? 0),
+    queryFn: () => apiFetch<{ asset_id: number; language: string | null; words: { w: string; s: number; e: number }[] }>(`/studio/assets/${assetId}/transcript`),
+    enabled: !!token && !!assetId,
+    retry: false,
+  });
+}
+
+// GET /studio/usage
+export function useStudioUsage() {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: keys.studioUsage,
+    queryFn: () => apiFetch<StudioUsage>('/studio/usage'),
+    enabled: !!token,
+    retry: false,
+  });
+}
+
+function useStudioMutation<TIn, TOut>(fn: (input: TIn) => Promise<TOut>, after?: (out: TOut, input: TIn) => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: TIn) => {
+      requireToken();
+      return fn(input);
+    },
+    onSuccess: (out, input) => {
+      after?.(out, input);
+      qc.invalidateQueries({ queryKey: keys.studio });
+    },
+  });
+}
+
+const setProject = (p: StudioProjectDetail) => queryClient.setQueryData(keys.studioProject(p.id), p);
+
+// POST /studio/projects
+export function useCreateStudioProject() {
+  return useStudioMutation(
+    (input: { title?: string; aspect?: Aspect; theme?: Partial<EdlTheme> }) =>
+      apiFetch<StudioProjectDetail>('/studio/projects', { method: 'POST', body: JSON.stringify(input) }),
+    setProject,
+  );
+}
+
+// PATCH /studio/projects/{id} — 409 means someone else saved first (ApiError.status === 409).
+export function useUpdateStudioProject() {
+  return useStudioMutation(
+    ({ id, ...body }: { id: number; title?: string; aspect?: Aspect; edl?: Edl; revision?: number }) =>
+      apiFetch<StudioProjectDetail>(`/studio/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    setProject,
+  );
+}
+
+// DELETE /studio/projects/{id}
+export function useDeleteStudioProject() {
+  return useStudioMutation((id: number) => apiFetch<null>(`/studio/projects/${id}`, { method: 'DELETE' }));
+}
+
+export type StudioUploadInput = { projectId: number; role: AssetRole; file: { uri: string; name: string; type: string } };
+
+// POST /studio/projects/{id}/assets (multipart) with upload progress 0..1.
+export function useUploadStudioAsset() {
+  const [progress, setProgress] = useState(0);
+  const mutation = useStudioMutation(async ({ projectId, role, file }: StudioUploadInput) => {
+    setProgress(0);
+    const form = new FormData();
+    form.append('role', role);
+    // React Native FormData file part.
+    form.append('file', { uri: file.uri, name: file.name, type: file.type } as unknown as Blob);
+    return apiUpload<StudioAsset>(`/studio/projects/${projectId}/assets`, form, setProgress);
+  });
+  return { ...mutation, progress };
+}
+
+/** Upload outside React (wizard loops over several clips). */
+export function uploadStudioAsset(input: StudioUploadInput, onProgress?: (f: number) => void): Promise<StudioAsset> {
+  requireToken();
+  const form = new FormData();
+  form.append('role', input.role);
+  form.append('file', { uri: input.file.uri, name: input.file.name, type: input.file.type } as unknown as Blob);
+  return apiUpload<StudioAsset>(`/studio/projects/${input.projectId}/assets`, form, onProgress);
+}
+
+// POST /studio/projects/{id}/assets {url, role}
+export function useAddStudioLink() {
+  return useStudioMutation(({ projectId, url, role }: { projectId: number; url: string; role: AssetRole }) =>
+    apiFetch<StudioAsset>(`/studio/projects/${projectId}/assets`, { method: 'POST', body: JSON.stringify({ url, role }) }),
+  );
+}
+
+// DELETE /studio/assets/{id}
+export function useDeleteStudioAsset() {
+  return useStudioMutation((id: number) => apiFetch<null>(`/studio/assets/${id}`, { method: 'DELETE' }));
+}
+
+// POST /studio/projects/{id}/auto-cut
+export function useAutoCut() {
+  return useStudioMutation(({ projectId, ...opts }: AutoCutOptions & { projectId: number }) =>
+    apiFetch<StudioJob>(`/studio/projects/${projectId}/auto-cut`, { method: 'POST', body: JSON.stringify(opts) }),
+  );
+}
+
+// POST /studio/projects/{id}/undo-auto-cut
+export function useUndoAutoCut() {
+  return useStudioMutation((projectId: number) => apiFetch<StudioProjectDetail>(`/studio/projects/${projectId}/undo-auto-cut`, { method: 'POST' }), setProject);
+}
+
+// POST /studio/projects/{id}/apply-reference
+export function useApplyReference() {
+  return useStudioMutation(
+    (projectId: number) => apiFetch<StudioProjectDetail & { changes: string[] }>(`/studio/projects/${projectId}/apply-reference`, { method: 'POST' }),
+    setProject,
+  );
+}
+
+// POST /studio/projects/{id}/render
+export function useRenderProject() {
+  return useStudioMutation(({ projectId, quality }: { projectId: number; quality: 'preview' | 'final' }) =>
+    apiFetch<StudioJob>(`/studio/projects/${projectId}/render`, { method: 'POST', body: JSON.stringify({ quality }) }),
+  );
+}
+
+// POST /studio/jobs/{id}/cancel
+export function useCancelStudioJob() {
+  return useStudioMutation((id: string) => apiFetch<StudioJob>(`/studio/jobs/${id}/cancel`, { method: 'POST' }));
+}
+
+// DELETE /studio/renders/{id}
+export function useDeleteStudioRender() {
+  return useStudioMutation((id: number) => apiFetch<null>(`/studio/renders/${id}`, { method: 'DELETE' }));
+}
+
+// POST /studio/templates/{slug}/customize
+export function useCustomizeTemplate() {
+  return useMutation({
+    mutationFn: async ({ slug, ...body }: { slug: string; purpose?: string; aspect?: Aspect; colors?: string[]; text?: string }) => {
+      requireToken();
+      return apiFetch<{ props: Record<string, unknown>; source: 'theme' | 'ai'; slug: string; version: number }>(`/studio/templates/${slug}/customize`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+    },
+  });
+}
+
+// POST /studio/renders/{id}/cross-post (same fields as POST /posts minus video).
+export function useCrossPostRender() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ renderId, ...input }: CrossPostRenderInput & { renderId: number }) => {
+      requireToken();
+      return apiFetch<Post>(`/studio/renders/${renderId}/cross-post`, { method: 'POST', body: JSON.stringify(input) });
+    },
+    onSuccess: (post) => {
+      qc.setQueryData(keys.post(post.id), post);
+      qc.invalidateQueries({ queryKey: keys.postsAll });
+      qc.invalidateQueries({ queryKey: keys.studio });
+    },
+  });
 }

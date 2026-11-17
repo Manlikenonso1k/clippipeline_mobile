@@ -326,3 +326,284 @@ export interface PushPayload {
   postId?: number;
   provider?: ConnectProvider;
 }
+
+// ---- §17 Studio ----
+export type Aspect = '9:16' | '1:1' | '16:9';
+export const ASPECTS: Aspect[] = ['9:16', '1:1', '16:9'];
+export type AssetRole = 'source' | 'reference' | 'music' | 'image' | 'logo';
+export type AssetStatus = 'pending' | 'fetching' | 'processing' | 'ready' | 'failed';
+export type StudioJobType =
+  | 'probe'
+  | 'fetch_link'
+  | 'transcribe'
+  | 'analyze_reference'
+  | 'auto_cut'
+  | 'render_preview'
+  | 'render_final'
+  | 'render_template_preview'
+  | 'explainer';
+export type StudioJobStatus = 'queued' | 'running' | 'done' | 'failed' | 'canceled';
+export type TemplateKind = 'segment' | 'overlay' | 'captions' | 'transition';
+
+export interface EdlTheme {
+  accent: string;
+  accent2?: string | null;
+  bg: string;
+  text: string;
+  font?: string | null;
+}
+export interface EdlTransition {
+  template: string;
+  duration: number;
+}
+export interface EdlClip {
+  id: string;
+  type: 'clip';
+  asset_id: number;
+  in: number;
+  out: number;
+  volume_db?: number;
+  speed?: number;
+  zoom?: number;
+  transition_in?: EdlTransition | null;
+  slot?: string;
+}
+export interface EdlTemplateSegment {
+  id: string;
+  type: 'template';
+  template: string;
+  version: number;
+  duration: number;
+  props: Record<string, unknown>;
+  transition_in?: EdlTransition | null;
+  slot?: string;
+}
+export type EdlSegment = EdlClip | EdlTemplateSegment;
+export interface EdlOverlay {
+  id: string;
+  template: string;
+  version: number;
+  anchor: string | null;
+  offset: number;
+  duration: number;
+  props: Record<string, unknown>;
+}
+export interface EdlCaptions {
+  enabled: boolean;
+  template: string;
+  version: number;
+  props: Record<string, unknown>;
+  fixes: Record<string, string>;
+}
+export interface EdlMusic {
+  asset_id: number;
+  start: number;
+  end: number | null;
+  volume: number;
+  duck: boolean;
+  fade_in: number;
+  fade_out: number;
+}
+export interface Edl {
+  version: 2;
+  aspect: Aspect;
+  fps: number;
+  theme: EdlTheme;
+  fit: 'blur' | 'crop' | 'black';
+  main: EdlSegment[];
+  overlays: EdlOverlay[];
+  captions: EdlCaptions;
+  music: EdlMusic[];
+  loudness: number;
+}
+
+export interface StyleProfile {
+  duration?: number;
+  aspect?: string;
+  shot_count?: number;
+  avg_shot_seconds?: number;
+  pace?: 'slow' | 'medium' | 'fast';
+  loudness_lufs?: number | null;
+  has_speech?: boolean;
+  has_music?: boolean;
+  palette?: string[];
+  ai_notes?: { caption_style?: string; text_overlays?: string; transitions?: string };
+  suggested?: {
+    captions_template?: string;
+    captions_props?: Record<string, unknown>;
+    max_segment_seconds?: number;
+    accent?: string;
+    punch_in?: boolean;
+  };
+}
+
+export interface StudioAsset {
+  id: number;
+  project_id: number | null;
+  role: AssetRole;
+  origin: 'upload' | 'link';
+  original_name: string | null;
+  mime: string | null;
+  size_bytes: number | null;
+  duration_seconds: number | null;
+  width: number | null;
+  height: number | null;
+  fps: number | null;
+  has_audio: boolean | null;
+  status: AssetStatus;
+  error: string | null;
+  url: string | null;
+  preview_url: string | null;
+  poster_url: string | null;
+  waveform_url: string | null;
+  thumbs_url: string | null;
+  thumbs: { cols: number; rows: number; count: number; interval: number; width: number; height: number } | null;
+  has_transcript: boolean;
+  transcript_language: string | null;
+  style_profile: StyleProfile | null;
+  created_at: string;
+}
+
+export interface StudioRender {
+  id: number;
+  project_id: number;
+  quality: 'preview' | 'final';
+  edl_revision: number;
+  duration_seconds: number | null;
+  size_bytes: number | null;
+  width: number | null;
+  height: number | null;
+  url: string;
+  download_url: string;
+  poster_url: string | null;
+  post_id: number | null;
+  check: { lufs?: number; true_peak?: number; black_frames?: number; long_silences?: number } | null;
+  created_at: string;
+}
+
+export interface StudioJob {
+  id: string;
+  type: StudioJobType;
+  status: StudioJobStatus;
+  progress: number;
+  message: string | null;
+  error: string | null;
+  project_id: number | null;
+  asset_id: number | null;
+  attempts: number;
+  result:
+    | null
+    | { cut_list: string[]; removed_seconds: number; kept_seconds: number; revision: number }
+    | { render_id: number }
+    | { style_profile: StyleProfile };
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface StudioProject {
+  id: number;
+  title: string;
+  aspect: Aspect;
+  fps: number;
+  revision: number;
+  duration_seconds: number;
+  clip_count: number;
+  poster_url: string | null;
+  reference_asset_id: number | null;
+  has_style_profile: boolean;
+  can_undo_auto_cut: boolean;
+  last_render: StudioRender | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudioProjectDetail extends StudioProject {
+  edl: Edl;
+  style_profile: StyleProfile | null;
+  assets: StudioAsset[];
+  active_jobs: StudioJob[];
+}
+
+/** JSON Schema subset the props forms understand (CONTRACT §17.1). */
+export interface PropSchema {
+  type?: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object';
+  title?: string;
+  description?: string;
+  format?: 'color' | 'asset:image' | 'asset:video' | string;
+  enum?: (string | number)[];
+  minimum?: number;
+  maximum?: number;
+  maxLength?: number;
+  maxItems?: number;
+  items?: PropSchema;
+  default?: unknown;
+}
+export interface PropsSchema {
+  type: 'object';
+  properties: Record<string, PropSchema>;
+  required?: string[];
+}
+
+export interface StudioTemplate {
+  slug: string;
+  version: number;
+  name: string;
+  categories: string[];
+  kind: TemplateKind;
+  aspects: Aspect[];
+  default_duration: number;
+  min_duration: number;
+  max_duration: number;
+  preview_url: string | null;
+  poster_url: string | null;
+  previews: Partial<Record<Aspect, { video_url: string | null; poster_url: string | null }>>;
+  credit: { handle: string; url?: string; note?: string } | null;
+  uses_count: number;
+  created_at: string;
+  props_schema: PropsSchema;
+  default_props: Record<string, unknown>;
+  /** Client-only: bundled poster (require id) for guest / offline mode. */
+  poster_source?: number;
+  /** Client-only: bundled preview loop (require id) for guest / offline mode. */
+  preview_source?: number;
+}
+
+export interface StudioTemplatesResponse {
+  total: number;
+  categories: { name: string; count: number }[];
+  templates: StudioTemplate[];
+}
+
+export interface StudioUsage {
+  plan: 'free' | 'pro' | 'agency';
+  period_start: string;
+  render_minutes_used: number;
+  render_minutes_limit: number | null;
+  ai_calls_used: number;
+  ai_calls_limit: number | null;
+  max_source_minutes: number;
+  max_upload_mb: number;
+  ai_enabled: boolean;
+  link_fetcher: 'off' | 'ytdlp';
+}
+
+export interface AutoCutOptions {
+  remove_silences?: boolean;
+  silence_min_seconds?: number;
+  silence_db?: number;
+  remove_fillers?: boolean;
+  filler_words?: string[];
+  max_segment_seconds?: number | null;
+  use_reference_style?: boolean;
+  target_seconds?: number | null;
+}
+
+export interface CrossPostRenderInput {
+  title: string;
+  caption: string | null;
+  hashtags: string[];
+  platforms: Platform[];
+  scheduled_at: string | null;
+  platform_options: PlatformOptions;
+}

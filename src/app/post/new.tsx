@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { File as FSFile } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -23,7 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ApiError, errorText } from '@/api/client';
-import { useCreatePost, useCreatorInfo, useFlags, useIsGuest, useMe, useSocialAccounts } from '@/api/hooks';
+import { useCreatePost, useCreatorInfo, useCrossPostRender, useFlags, useIsGuest, useMe, useSocialAccounts } from '@/api/hooks';
 import type { PlatformOptions, Platform, YouTubePrivacy } from '@/api/types';
 import { PLATFORMS } from '@/api/types';
 import { PLATFORM_COLOR, PLATFORM_LABEL } from '@/components/post-utils';
@@ -157,14 +157,28 @@ function ClipPreview({ uri }: { uri: string }) {
 }
 
 export default function NewPostScreen() {
+  // Studio "Cross-post": the video is a render already on the server (CONTRACT §17).
+  const params = useLocalSearchParams<{ renderId?: string; renderUrl?: string; renderTitle?: string; renderDuration?: string; renderSize?: string }>();
+  const renderId = params.renderId ? Number(params.renderId) : null;
   const guest = useIsGuest();
   const accountsQ = useSocialAccounts();
   const create = useCreatePost();
+  const crossPost = useCrossPostRender();
   const flags = useFlags();
   const prefs = useMe().data?.preferences;
 
-  const [video, setVideo] = useState<Picked | null>(null);
-  const [title, setTitle] = useState('');
+  const [video, setVideo] = useState<Picked | null>(() =>
+    renderId && params.renderUrl
+      ? {
+          uri: params.renderUrl,
+          name: 'Studio render',
+          type: 'video/mp4',
+          size: params.renderSize ? Number(params.renderSize) : null,
+          duration: params.renderDuration ? Number(params.renderDuration) * 1000 : null,
+        }
+      : null,
+  );
+  const [title, setTitle] = useState(() => (params.renderTitle ?? '').slice(0, MAX_TITLE));
   const [caption, setCaption] = useState('');
   const [tagsInput, setTagsInput] = useState<string | null>(null);
   const [selected, setSelected] = useState<Platform[] | null>(null);
@@ -217,8 +231,8 @@ export default function NewPostScreen() {
   const ttDisclosureIncomplete = ttOn && ttDisclose && !ttYourBrand && !ttBranded;
   const publishBlocked = ttMissingPrivacy || ttDisclosureIncomplete;
   const scheduledAt = scheduleOn ? parseLocal(date, time) : null;
-  const uploading = create.isPending;
-  const pct = Math.round(create.progress * 100);
+  const uploading = create.isPending || crossPost.isPending;
+  const pct = renderId ? 100 : Math.round(create.progress * 100);
 
   const toggle = (p: Platform) => {
     const base = chosen;
@@ -331,6 +345,24 @@ export default function NewPostScreen() {
     if (!video) return;
     setError(null);
     setConfirmOpen(false);
+    if (renderId) {
+      crossPost.mutate(
+        {
+          renderId,
+          title: title.trim(),
+          caption: caption.trim() || null,
+          hashtags,
+          platforms: chosen,
+          scheduled_at: scheduledAt ? scheduledAt.toISOString() : null,
+          platform_options: platformOptions(),
+        },
+        {
+          onSuccess: (post) => router.replace({ pathname: '/post/[id]', params: { id: String(post.id) } }),
+          onError: (e) => setError(errorText(e)),
+        },
+      );
+      return;
+    }
     create.mutate(
       {
         video: { uri: video.uri, name: video.name, type: video.type },
@@ -375,7 +407,7 @@ export default function NewPostScreen() {
           ) : null}
 
           {/* Video picker */}
-          <AnimatedPressable accessibilityRole="button" accessibilityLabel="Pick a video" style={s.picker} onPress={pickVideo} disabled={uploading}>
+          <AnimatedPressable accessibilityRole="button" accessibilityLabel={renderId ? 'Studio render' : 'Pick a video'} style={s.picker} onPress={pickVideo} disabled={uploading || !!renderId}>
             <LinearGradient colors={['rgba(124,92,255,0.18)', 'rgba(177,76,255,0.06)'] as const} style={StyleSheet.absoluteFill} />
             <View style={s.pickerIcon}>
               <MaterialIcons name={video ? 'movie' : 'video-library'} size={26} color={C.primary} />
@@ -392,7 +424,7 @@ export default function NewPostScreen() {
                   : 'MP4, MOV or WebM — vertical 9:16 works best'}
               </Text>
             </View>
-            <Text style={s.link}>{video ? 'Change' : 'Browse'}</Text>
+            {renderId ? <Text style={s.link}>From Studio</Text> : <Text style={s.link}>{video ? 'Change' : 'Browse'}</Text>}
           </AnimatedPressable>
 
           {video ? <ClipPreview uri={video.uri} /> : null}

@@ -19,6 +19,7 @@ type TabDef = {
 const TABS: TabDef[] = [
   { name: 'dashboard', label: 'Home', active: 'home', inactive: 'home-outline' },
   { name: 'posts', label: 'Posts', active: 'film', inactive: 'film-outline' },
+  { name: 'studio', label: 'Studio', active: 'color-wand', inactive: 'color-wand-outline' },
   { name: 'connect', label: 'Connect', active: 'link', inactive: 'link-outline' },
   { name: 'insights', label: 'Insights', active: 'stats-chart', inactive: 'stats-chart-outline' },
   { name: 'profile', label: 'Profile', active: 'person', inactive: 'person-outline' },
@@ -95,6 +96,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="dashboard" />
       <Tabs.Screen name="posts" />
+      <Tabs.Screen name="studio" />
       <Tabs.Screen name="connect" />
       <Tabs.Screen name="insights" />
       <Tabs.Screen name="profile" />
@@ -105,6 +107,6 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   bar: { flexDirection: 'row', backgroundColor: C.bar, borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8 },
   item: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  label: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.2 },
+  label: { fontSize: 11, lineHeight: 16, fontWeight: '600', letterSpacing: 0.2 },
   dot: { position: 'absolute', bottom: -2, width: 4, height: 4, borderRadius: 2, backgroundColor: C.dot },
 });

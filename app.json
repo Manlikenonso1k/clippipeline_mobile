@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.codebynonso.clippipeline",
-      "versionCode": 13,
+      "versionCode": 14,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
@@ -48,6 +48,17 @@
           "photosPermission": "ClipPipeline needs access to your videos so you can pick a clip to publish.",
           "cameraPermission": false,
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "ClipPipeline needs access to your videos so you can pick clips to edit.",
+          "savePhotosPermission": "ClipPipeline saves your finished videos to your gallery.",
+          "granularPermissions": [
+            "photo",
+            "video"
+          ]
         }
       ]
     ],

@@ -19,7 +19,17 @@ import type {
   PostFilter,
   SocialAccount,
   TopPost,
+  Aspect,
+  Edl,
+  StudioProject,
+  StudioProjectDetail,
+  StudioRender,
+  StudioTemplate,
+  StudioTemplatesResponse,
+  TemplateKind,
 } from './types';
+import TEMPLATE_CATALOGUE from './studio/templates.json';
+import { TEMPLATE_LOOPS, TEMPLATE_POSTERS } from './studio/posters';
 import { PLATFORMS } from './types';
 import { FALLBACK_FLAGS, WEB_BASE_URL } from './config';
 
@@ -345,4 +355,88 @@ export function demoPostAnalytics(id: number): PostAnalyticsResponse {
       };
     }),
   };
+}
+
+// ---------------- §17 Studio (guest / offline demo) ----------------
+// The template catalogue is generated from clippipeline/motion/dist/templates.json,
+// so the gallery works signed-out and before the server has Studio.
+
+const CATALOGUE = (TEMPLATE_CATALOGUE as unknown as StudioTemplate[]).map((t) => ({ ...t, poster_source: TEMPLATE_POSTERS[t.slug], preview_source: TEMPLATE_LOOPS[t.slug] }));
+const CATEGORY_ORDER = ['Kinetic type', 'Product UI', 'Phone', 'Charts', 'Diagrams', 'Shapes', 'Particles', 'Characters', 'Photos', 'Music', 'Code'];
+
+export function demoTemplates(params: { category?: string | null; kind?: TemplateKind | null; aspect?: Aspect | null; sort?: 'popular' | 'new' } = {}): StudioTemplatesResponse {
+  const categories = CATEGORY_ORDER.map((name) => ({ name, count: CATALOGUE.filter((t) => t.categories.includes(name)).length })).filter((c) => c.count > 0);
+  let list = CATALOGUE.filter(
+    (t) =>
+      (!params.category || t.categories.includes(params.category)) &&
+      (!params.kind || t.kind === params.kind) &&
+      (!params.aspect || t.aspects.includes(params.aspect)),
+  );
+  list = params.sort === 'new' ? [...list].reverse() : [...list].sort((a, b) => b.uses_count - a.uses_count);
+  return { total: CATALOGUE.length, categories, templates: list };
+}
+
+export function demoTemplate(slug: string): StudioTemplate | undefined {
+  return CATALOGUE.find((t) => t.slug === slug);
+}
+
+const demoEdl = (aspect: Aspect): Edl => ({
+  version: 2,
+  aspect,
+  fps: 30,
+  theme: { accent: '#7C5CFF', accent2: '#B14CFF', bg: '#0E0E12', text: '#FFFFFF', font: 'Inter' },
+  fit: 'blur',
+  main: [
+    { id: 'd1', type: 'template', template: 'kinetic-title', version: 1, duration: 2.5, props: { kicker: 'DAY IN THE LIFE', title: 'Lagos to Lekki', subtitle: '' } },
+    { id: 'd2', type: 'clip', asset_id: 9001, in: 1.2, out: 9.8, volume_db: 0, speed: 1, zoom: 1 },
+    { id: 'd3', type: 'clip', asset_id: 9002, in: 0.4, out: 6.1, volume_db: 0, speed: 1, zoom: 1.08, transition_in: { template: 'swipe', duration: 0.45 } },
+    { id: 'd4', type: 'template', template: 'cta-outro', version: 1, duration: 3, props: { handle: '@ada.creates', cta: 'Follow for more' }, slot: 'outro' },
+  ],
+  overlays: [{ id: 'o1', template: 'lower-third', version: 1, anchor: 'd2', offset: 0.5, duration: 3, props: { name: 'Ada Obi', role: 'Creator' } }],
+  captions: { enabled: true, template: 'captions-pop', version: 1, props: {}, fixes: {} },
+  music: [],
+  loudness: -14,
+});
+
+const demoRender = (projectId: number, id: number, quality: 'preview' | 'final'): StudioRender => ({
+  id,
+  project_id: projectId,
+  quality,
+  edl_revision: 4,
+  duration_seconds: 22.4,
+  size_bytes: quality === 'final' ? 18_400_000 : 3_100_000,
+  width: quality === 'final' ? 1080 : 540,
+  height: quality === 'final' ? 1920 : 960,
+  url: '',
+  download_url: '',
+  poster_url: null,
+  post_id: null,
+  check: { lufs: -14.1, true_peak: -1.4, black_frames: 0, long_silences: 0 },
+  created_at: iso(1),
+});
+
+export const DEMO_STUDIO_PROJECTS: StudioProject[] = [
+  { id: 901, title: 'Lagos to Lekki vlog', aspect: '9:16', fps: 30, revision: 4, duration_seconds: 22.4, clip_count: 2, poster_url: null, reference_asset_id: null, has_style_profile: true, can_undo_auto_cut: true, last_render: demoRender(901, 71, 'final'), created_at: iso(3), updated_at: iso(1) },
+  { id: 902, title: 'Product launch teaser', aspect: '1:1', fps: 30, revision: 2, duration_seconds: 14.0, clip_count: 1, poster_url: null, reference_asset_id: null, has_style_profile: false, can_undo_auto_cut: false, last_render: null, created_at: iso(6), updated_at: iso(5) },
+];
+
+export function demoStudioProject(id: number): StudioProjectDetail | undefined {
+  const base = DEMO_STUDIO_PROJECTS.find((p) => p.id === id) ?? DEMO_STUDIO_PROJECTS[0];
+  const clip = (aid: number, name: string, dur: number) => ({
+    id: aid, project_id: base.id, role: 'source' as const, origin: 'upload' as const, original_name: name, mime: 'video/mp4', size_bytes: 24_000_000,
+    duration_seconds: dur, width: 1080, height: 1920, fps: 30, has_audio: true, status: 'ready' as const, error: null, url: null, preview_url: null,
+    poster_url: null, waveform_url: null, thumbs_url: null, thumbs: null, has_transcript: true, transcript_language: 'en', style_profile: null, created_at: iso(3),
+  });
+  return {
+    ...base,
+    edl: demoEdl(base.aspect),
+    style_profile: base.has_style_profile ? { pace: 'fast', avg_shot_seconds: 1.9, palette: ['#111111', '#F5D90A', '#FFFFFF'], suggested: { captions_template: 'captions-pop', accent: '#F5D90A', punch_in: true, max_segment_seconds: 2.2 } } : null,
+    assets: [clip(9001, 'IMG_2041.MOV', 12.3), clip(9002, 'IMG_2044.MOV', 7.9)],
+    active_jobs: [],
+  };
+}
+
+export function demoStudioRenders(projectId: number): StudioRender[] {
+  const p = DEMO_STUDIO_PROJECTS.find((x) => x.id === projectId);
+  return p?.last_render ? [p.last_render, demoRender(projectId, 70, 'preview')] : [];
 }
