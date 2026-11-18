@@ -1,6 +1,10 @@
-## ClipPipeline 1.0.0 (build 16)
+## ClipPipeline 1.0.0 (build 17)
 
-### New in build 16: email accounts
+### New in build 17
+- **Notifications show the ClipPipeline film-strip icon** (not the Expo logo), tinted in the brand orange.
+- The splash screen and Android themed icon use the ClipPipeline mark too.
+
+### Build 16: email accounts
 - **Create account** with your name, email and a password, right from the sign-in screen.
 - **Forgot password?** sends you an email with a link to choose a new password (the link opens the ClipPipeline website, then sign in in the app).
 - **Profile → Change password.** Accounts made with Google, Facebook or TikTok see **Set a password**, so you can also sign in with your email.

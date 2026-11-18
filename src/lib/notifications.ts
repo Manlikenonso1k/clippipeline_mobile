@@ -32,7 +32,7 @@ export async function registerNotificationChannels(): Promise<void> {
         importance: Notifications.AndroidImportance.HIGH,
         sound: 'default',
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#7C5CFF',
+        lightColor: '#FF6B35',
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       });
     } catch {
