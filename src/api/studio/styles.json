@@ -1,0 +1,106 @@
+{
+ "styles": [
+  {
+   "slug": "vice-night",
+   "name": "Vice Night",
+   "description": "Neon pink and purple, bold headlines on key words, word-pop captions, punch-in zooms, sound effects.",
+   "theme": {
+    "accent": "#FF2D95",
+    "accent2": "#8B3DFF",
+    "bg": "#0E0418",
+    "text": "#FFFFFF",
+    "font": "Inter",
+    "display": "Anton"
+   },
+   "grade": "vice-night",
+   "sfx": true,
+   "music": "neon-drive",
+   "captions": "captions-bold"
+  },
+  {
+   "slug": "lagos-glow",
+   "name": "Lagos Glow",
+   "description": "Warm grade, green and gold accents, bold captions, amapiano groove.",
+   "theme": {
+    "accent": "#1FD17A",
+    "accent2": "#FFC93C",
+    "bg": "#07140D",
+    "text": "#FFFFFF",
+    "font": "Inter",
+    "display": "Anton"
+   },
+   "grade": "warm",
+   "sfx": true,
+   "music": "lagos-glow",
+   "captions": "captions-bold"
+  },
+  {
+   "slug": "bold-pop",
+   "name": "Bold Pop",
+   "description": "High contrast, yellow and red, slam headlines and fast energy.",
+   "theme": {
+    "accent": "#FFE500",
+    "accent2": "#FF3B3B",
+    "bg": "#0A0A0A",
+    "text": "#FFFFFF",
+    "font": "Inter",
+    "display": "Anton"
+   },
+   "grade": "punch",
+   "sfx": true,
+   "music": "night-run",
+   "captions": "captions-pop"
+  },
+  {
+   "slug": "clean-pro",
+   "name": "Clean Pro",
+   "description": "Calm and professional: clean subtitles, a few headlines, no sound effects.",
+   "theme": {
+    "accent": "#00D1C1",
+    "accent2": "#2A6FFF",
+    "bg": "#0B0F14",
+    "text": "#FFFFFF",
+    "font": "Inter",
+    "display": "Inter"
+   },
+   "grade": "none",
+   "sfx": false,
+   "music": "chill-tape",
+   "captions": "captions-clean"
+  }
+ ],
+ "music": [
+  {
+   "slug": "neon-drive",
+   "name": "Neon Drive",
+   "mood": "Synthwave \u00b7 night city",
+   "bpm": 105,
+   "seconds": 60,
+   "url": null
+  },
+  {
+   "slug": "night-run",
+   "name": "Night Run",
+   "mood": "Dark \u00b7 driving",
+   "bpm": 122,
+   "seconds": 60,
+   "url": null
+  },
+  {
+   "slug": "lagos-glow",
+   "name": "Lagos Glow",
+   "mood": "Amapiano groove",
+   "bpm": 112,
+   "seconds": 60,
+   "url": null
+  },
+  {
+   "slug": "chill-tape",
+   "name": "Chill Tape",
+   "mood": "Lo-fi \u00b7 relaxed",
+   "bpm": 84,
+   "seconds": 60,
+   "url": null
+  }
+ ]
+}

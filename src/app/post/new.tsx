@@ -158,7 +158,7 @@ function ClipPreview({ uri }: { uri: string }) {
 
 export default function NewPostScreen() {
   // Studio "Cross-post": the video is a render already on the server (CONTRACT §17).
-  const params = useLocalSearchParams<{ renderId?: string; renderUrl?: string; renderTitle?: string; renderDuration?: string; renderSize?: string }>();
+  const params = useLocalSearchParams<{ renderId?: string; renderUrl?: string; renderTitle?: string; renderDuration?: string; renderSize?: string; caption?: string; hashtags?: string; platform?: string }>();
   const renderId = params.renderId ? Number(params.renderId) : null;
   const guest = useIsGuest();
   const accountsQ = useSocialAccounts();
@@ -179,9 +179,14 @@ export default function NewPostScreen() {
       : null,
   );
   const [title, setTitle] = useState(() => (params.renderTitle ?? '').slice(0, MAX_TITLE));
-  const [caption, setCaption] = useState('');
-  const [tagsInput, setTagsInput] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Platform[] | null>(null);
+  const [caption, setCaption] = useState(() => (params.caption ?? '').slice(0, MAX_CAPTION));
+  const [tagsInput, setTagsInput] = useState<string | null>(() =>
+    params.hashtags ? params.hashtags.split(',').filter(Boolean).map((t) => `#${t}`).join(' ') : null,
+  );
+  // Studio suggests the platform the video was made for; Instagram covers Facebook Reels too.
+  const [selected, setSelected] = useState<Platform[] | null>(() =>
+    params.platform && (PLATFORMS as string[]).includes(params.platform) ? [params.platform as Platform] : null,
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
   // YouTube (P-04)
   const [ytPrivacy, setYtPrivacy] = useState<YouTubePrivacy | null>(null);

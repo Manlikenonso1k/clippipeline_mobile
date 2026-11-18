@@ -501,6 +501,73 @@ export interface StudioJob {
   finished_at: string | null;
 }
 
+export type TrendPlatform = 'tiktok' | 'youtube' | 'instagram';
+
+export interface StudioStyle {
+  slug: string;
+  name: string;
+  description: string;
+  theme: EdlTheme & { display?: string | null };
+  grade: 'none' | 'vice-night' | 'warm' | 'punch';
+  sfx: boolean;
+  music: string | null;
+  captions: string;
+}
+
+export interface StudioMusic {
+  slug: string;
+  name: string;
+  mood: string;
+  bpm: number;
+  seconds: number;
+  url: string | null;
+}
+
+export interface StudioTrend {
+  id: number;
+  platform: TrendPlatform;
+  title: string;
+  hook: string | null;
+  hashtags: string[];
+  source: 'youtube' | 'curated';
+  url: string | null;
+  score: number;
+}
+
+/** "Make a video" recipe (CONTRACT §17.5). */
+export interface StudioRecipe {
+  status: 'waiting' | 'rendering' | 'done' | 'failed';
+  error?: string | null;
+  style?: string;
+  music?: string;
+  platform?: TrendPlatform | null;
+  topic?: { title?: string; hook?: string | null; hashtags?: string[]; trend_id?: number } | null;
+  handle?: string;
+  cta?: string;
+  note?: string;
+  job_id?: string;
+  render_id?: number;
+  caption?: string;
+  hashtags?: string[];
+  headlines?: string[];
+  hook?: string;
+  picked_by?: 'auto' | 'ai';
+}
+
+export interface ExpressInput {
+  style: string;
+  music?: string;
+  platform?: TrendPlatform | null;
+  trend_id?: number | null;
+  topic?: { title?: string; hook?: string; hashtags?: string[] } | null;
+  handle?: string;
+  cta?: string;
+  note?: string;
+  title?: string;
+  aspect?: Aspect;
+  fixes?: Record<string, string>;
+}
+
 export interface StudioProject {
   id: number;
   title: string;
@@ -514,6 +581,7 @@ export interface StudioProject {
   has_style_profile: boolean;
   can_undo_auto_cut: boolean;
   last_render: StudioRender | null;
+  recipe: StudioRecipe | null;
   created_at: string;
   updated_at: string;
 }

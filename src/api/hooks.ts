@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ApiError, apiFetch, apiUpload } from './client';
 import { API_BASE_URL, FALLBACK_FLAGS } from './config';
 import { useAuthStore } from '@/store/authStore';
+import STYLE_CATALOGUE from './studio/styles.json';
 import {
   DEMO_ACCOUNTS,
   DEMO_ME,
@@ -36,6 +37,11 @@ import type {
   StudioTemplate,
   StudioTemplatesResponse,
   StudioUsage,
+  StudioMusic,
+  StudioStyle,
+  StudioTrend,
+  ExpressInput,
+  TrendPlatform,
   TemplateKind,
   AnalyticsOverview,
   AnalyticsPlatforms,
@@ -94,6 +100,8 @@ export const keys = {
   studioTemplate: (slug: string) => ['studio', 'template', slug] as const,
   studioTranscript: (id: number) => ['studio', 'transcript', id] as const,
   studioUsage: ['studio', 'usage'] as const,
+  studioStyles: ['studio', 'styles'] as const,
+  studioTrends: (platform: string) => ['studio', 'trends', platform] as const,
 };
 
 export const IN_FLIGHT: DistributionStatus[] = ['queued', 'uploading', 'processing'];
@@ -479,6 +487,7 @@ const STUDIO_ACTIVE: StudioJobStatus[] = ['queued', 'running'];
 /** True while anything in the project is still being processed on the server. */
 export function isProjectBusy(p: StudioProjectDetail | undefined): boolean {
   if (!p) return false;
+  if (p.recipe && (p.recipe.status === 'waiting' || p.recipe.status === 'rendering')) return true;
   return p.active_jobs.length > 0 || p.assets.some((a) => a.status === 'pending' || a.status === 'fetching' || a.status === 'processing');
 }
 
@@ -731,4 +740,48 @@ export function useCrossPostRender() {
       qc.invalidateQueries({ queryKey: keys.studio });
     },
   });
+}
+
+// ---------------- §17.5 Make a video ----------------
+
+/** GET /studio/styles (public), with the bundled catalogue as a fallback. */
+export function useStudioStyles() {
+  return useQuery({
+    queryKey: keys.studioStyles,
+    queryFn: async (): Promise<{ styles: StudioStyle[]; music: StudioMusic[]; offline: boolean }> => {
+      try {
+        const res = await apiFetch<{ styles: StudioStyle[]; music: StudioMusic[] }>('/studio/styles');
+        if (res.styles?.length) return { ...res, offline: false };
+      } catch {
+        // fall back to the bundled catalogue
+      }
+      const bundled = STYLE_CATALOGUE as unknown as { styles: StudioStyle[]; music: StudioMusic[] };
+      return { ...bundled, offline: true };
+    },
+    staleTime: 10 * 60_000,
+  });
+}
+
+/** GET /studio/trends?platform= (public). */
+export function useStudioTrends(platform: TrendPlatform) {
+  return useQuery({
+    queryKey: keys.studioTrends(platform),
+    queryFn: () => apiFetch<{ region: string; updated_at: string | null; trends: StudioTrend[] }>(`/studio/trends?platform=${platform}`),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+// POST /studio/express
+export function useCreateExpress() {
+  return useStudioMutation((input: ExpressInput) => apiFetch<StudioProjectDetail>('/studio/express', { method: 'POST', body: JSON.stringify(input) }), setProject);
+}
+
+// POST /studio/projects/{id}/express (try another style / music)
+export function useRemakeExpress() {
+  return useStudioMutation(
+    ({ projectId, ...input }: Partial<ExpressInput> & { projectId: number }) =>
+      apiFetch<StudioProjectDetail>(`/studio/projects/${projectId}/express`, { method: 'POST', body: JSON.stringify(input) }),
+    setProject,
+  );
 }

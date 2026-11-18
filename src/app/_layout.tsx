@@ -86,6 +86,7 @@ export default function RootLayout() {
           <Stack.Screen name="post/[id]" />
           <Stack.Screen name="auth" />
           <Stack.Screen name="studio/new" />
+          <Stack.Screen name="studio/make" />
           <Stack.Screen name="studio/[id]" />
           <Stack.Screen name="studio/templates" />
           <Stack.Screen name="studio/render/[id]" />

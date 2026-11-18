@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.codebynonso.clippipeline",
-      "versionCode": 14,
+      "versionCode": 15,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
@@ -59,6 +59,14 @@
             "photo",
             "video"
           ]
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
         }
       ]
     ],

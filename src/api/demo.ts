@@ -416,8 +416,8 @@ const demoRender = (projectId: number, id: number, quality: 'preview' | 'final')
 });
 
 export const DEMO_STUDIO_PROJECTS: StudioProject[] = [
-  { id: 901, title: 'Lagos to Lekki vlog', aspect: '9:16', fps: 30, revision: 4, duration_seconds: 22.4, clip_count: 2, poster_url: null, reference_asset_id: null, has_style_profile: true, can_undo_auto_cut: true, last_render: demoRender(901, 71, 'final'), created_at: iso(3), updated_at: iso(1) },
-  { id: 902, title: 'Product launch teaser', aspect: '1:1', fps: 30, revision: 2, duration_seconds: 14.0, clip_count: 1, poster_url: null, reference_asset_id: null, has_style_profile: false, can_undo_auto_cut: false, last_render: null, created_at: iso(6), updated_at: iso(5) },
+  { id: 901, title: 'Lagos to Lekki vlog', aspect: '9:16', fps: 30, revision: 4, duration_seconds: 22.4, clip_count: 2, poster_url: null, reference_asset_id: null, has_style_profile: true, can_undo_auto_cut: true, last_render: demoRender(901, 71, 'final'), recipe: { status: 'done', style: 'vice-night', music: 'neon-drive', render_id: 71, caption: 'Lagos to Lekki in one day', hashtags: ['lagos', 'vlog', 'fyp'], headlines: ['Lekki', 'Traffic', 'Worth it'] }, created_at: iso(3), updated_at: iso(1) },
+  { id: 902, title: 'Product launch teaser', aspect: '1:1', fps: 30, revision: 2, duration_seconds: 14.0, clip_count: 1, poster_url: null, reference_asset_id: null, has_style_profile: false, can_undo_auto_cut: false, last_render: null, recipe: null, created_at: iso(6), updated_at: iso(5) },
 ];
 
 export function demoStudioProject(id: number): StudioProjectDetail | undefined {

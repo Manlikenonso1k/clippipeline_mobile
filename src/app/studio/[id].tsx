@@ -27,6 +27,7 @@ import {
 } from '@/api/hooks';
 import type { AssetRole, Edl, EdlClip, EdlSegment, StudioAsset, StudioJob, StudioProjectDetail } from '@/api/types';
 import { Sheet } from '@/components/sheet';
+import { ExpressCard } from '@/components/studio/ExpressCard';
 import { TrimBar } from '@/components/studio/TrimBar';
 import { C, Card, Chip, GhostButton, Header, JobRow, PrimaryButton, PropsForm, SectionTitle, ToggleRow, s as ui, secs } from '@/components/studio/ui';
 import { InlineMessage } from '@/components/ui-kit';
@@ -183,7 +184,7 @@ export default function StudioProjectScreen() {
   const edl = p.edl;
   const total = edlSeconds(edl);
   const last = renders.data?.[0] ?? p.last_render;
-  const preparing = !!pending && !guest;
+  const preparing = !!pending && !guest && !p.recipe;
 
   return (
     <SafeAreaView style={ui.safe} edges={['top']}>
@@ -201,6 +202,8 @@ export default function StudioProjectScreen() {
         {guest ? <InlineMessage icon="lock-outline" text="Sample project — sign in to edit and render your own." /> : null}
         {conflict ? <InlineMessage icon="sync-problem" tone="danger" text="This project changed on another device. We loaded the latest version; make your change again." /> : null}
         {notice ? <InlineMessage icon={notice.tone ? 'error-outline' : 'check-circle'} tone={notice.tone} text={notice.text} /> : null}
+
+        {p.recipe ? <ExpressCard p={p} guest={guest} /> : null}
 
         {/* Preview */}
         <Pressable

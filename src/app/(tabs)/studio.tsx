@@ -30,8 +30,10 @@ function ProjectCard({ p }: { p: StudioProject }) {
           {p.clip_count} clip{p.clip_count === 1 ? '' : 's'} · {secs(p.duration_seconds)}
         </Text>
         <View style={st.statusRow}>
-          <MaterialIcons name={render ? 'check-circle' : 'edit'} size={14} color={render ? C.success : C.muted} />
-          <Text style={ui.mutedSmall}>{render ? `${render.quality === 'final' ? 'Final' : 'Preview'} rendered` : 'Draft'}</Text>
+          <MaterialIcons name={render ? 'check-circle' : p.recipe && p.recipe.status !== 'failed' ? 'hourglass-top' : 'edit'} size={14} color={render ? C.success : C.muted} />
+          <Text style={ui.mutedSmall}>
+            {p.recipe && (p.recipe.status === 'waiting' || p.recipe.status === 'rendering') ? 'Making your video…' : render ? `${render.quality === 'final' ? 'Ready' : 'Preview rendered'}` : p.recipe?.status === 'failed' ? 'Needs another try' : 'Draft'}
+          </Text>
           {p.has_style_profile ? <Text style={[ui.mutedSmall, { color: C.primary }]}>· Reference style</Text> : null}
         </View>
       </View>
@@ -62,7 +64,16 @@ export default function StudioTab() {
         </Pressable>
       ) : null}
 
-      <PrimaryButton label="New project" icon="add" onPress={() => (requireAccount('Sign in to create a Studio project.') ? router.push('/studio/new') : undefined)} />
+      <PrimaryButton label="Make a video" icon="auto-awesome" onPress={() => (requireAccount('Sign in to make videos with Studio.') ? router.push('/studio/make') : undefined)} />
+      <Text style={[ui.mutedSmall, { marginTop: -8 }]}>Upload, pick a style and music, and Studio edits it for you: cuts, captions, headlines, music, outro.</Text>
+      <AnimatedPressable accessibilityRole="button" style={st.galleryLink} onPress={() => (requireAccount('Sign in to create a Studio project.') ? router.push('/studio/new') : undefined)}>
+        <MaterialIcons name="tune" size={22} color={C.primary} />
+        <View style={ui.flex}>
+          <Text style={ui.label}>Advanced editor</Text>
+          <Text style={ui.mutedSmall}>Several clips, a reference video, trim and place every template yourself</Text>
+        </View>
+        <MaterialIcons name="chevron-right" size={22} color={C.muted} />
+      </AnimatedPressable>
 
       <AnimatedPressable accessibilityRole="button" style={st.galleryLink} onPress={() => router.push('/studio/templates')}>
         <LinearGradient colors={['rgba(124,92,255,0.22)', 'rgba(177,76,255,0.06)']} style={StyleSheet.absoluteFill} />
