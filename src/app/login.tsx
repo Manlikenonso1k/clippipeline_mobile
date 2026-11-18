@@ -46,9 +46,18 @@ export default function LoginScreen() {
   const flags = useFlags();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Provider | 'email' | null>(null);
-  const [emailMode, setEmailMode] = useState(false);
+  // Email accounts (CONTRACT §18): sign in, create an account, or ask for a reset link.
+  const [emailMode, setEmailMode] = useState<'off' | 'signin' | 'register' | 'forgot'>('off');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+  const switchMode = (m: 'off' | 'signin' | 'register' | 'forgot') => {
+    setError(null);
+    setNotice(null);
+    setEmailMode(m);
+  };
 
   // §9 broker: GET /auth/{provider}/start → browser → clippipelinemobile://auth?code= → POST /auth/exchange.
   async function signIn(provider: Provider) {
@@ -79,7 +88,41 @@ export default function LoginScreen() {
       await setToken(data.token);
       router.replace('/dashboard');
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Unable to sign in.');
+      setError(cause instanceof ApiError ? errorText(cause) : 'Unable to sign in.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function createAccount() {
+    setError(null);
+    if (!name.trim() || !email.trim() || !password) return setError('Enter your name, email and a password.');
+    if (password.length < 8) return setError('Use at least 8 characters for your password.');
+    if (password !== confirm) return setError('The two passwords do not match.');
+    setBusy('email');
+    try {
+      const data = await apiFetch<{ token: string }>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, password_confirmation: confirm }),
+      });
+      await setToken(data.token);
+      router.replace('/dashboard');
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function sendReset() {
+    setError(null);
+    if (!email.trim()) return setError('Enter the email you signed up with.');
+    setBusy('email');
+    try {
+      const data = await apiFetch<{ message: string }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email: email.trim() }) });
+      setNotice(`${data.message} Open the link, choose a new password, then sign in here.`);
+    } catch (cause) {
+      setError(errorText(cause));
     } finally {
       setBusy(null);
     }
@@ -195,19 +238,28 @@ export default function LoginScreen() {
           </Pressable>
         </View>
 
-        {/* Email / password sign-in */}
+        {/* Email: sign in, create account, forgot password */}
         <View style={s.emailWrap}>
-          {!emailMode ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => { setError(null); setEmailMode(true); }}
-              style={({ pressed }) => [s.emailToggle, pressed && s.pressedSoft]}
-            >
-              <MaterialIcons name="mail-outline" size={16} color={C.muted} />
-              <Text style={s.emailToggleText}>Sign in with email</Text>
-            </Pressable>
+          {emailMode === 'off' ? (
+            <View style={s.emailLinks}>
+              <Pressable accessibilityRole="button" onPress={() => switchMode('signin')} style={({ pressed }) => [s.emailToggle, pressed && s.pressedSoft]}>
+                <MaterialIcons name="mail-outline" size={16} color={C.muted} />
+                <Text style={s.emailToggleText}>Sign in with email</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => switchMode('register')} style={({ pressed }) => [s.emailToggle, pressed && s.pressedSoft]}>
+                <MaterialIcons name="person-add-alt" size={16} color={C.muted} />
+                <Text style={s.emailToggleText}>Create account</Text>
+              </Pressable>
+            </View>
           ) : (
             <View style={s.emailForm}>
+              <Text style={s.emailTitle}>{emailMode === 'register' ? 'Create your account' : emailMode === 'forgot' ? 'Reset your password' : 'Sign in with email'}</Text>
+              {emailMode === 'register' ? (
+                <View style={s.input}>
+                  <MaterialIcons name="person-outline" size={18} color={C.muted} />
+                  <TextInput style={s.inputText} placeholder="Your name" placeholderTextColor={C.outline} autoComplete="name" value={name} onChangeText={setName} editable={busy === null} maxLength={80} />
+                </View>
+              ) : null}
               <View style={s.input}>
                 <MaterialIcons name="mail-outline" size={18} color={C.muted} />
                 <TextInput
@@ -222,30 +274,58 @@ export default function LoginScreen() {
                   editable={busy === null}
                 />
               </View>
-              <View style={s.input}>
-                <MaterialIcons name="lock-outline" size={18} color={C.muted} />
-                <TextInput
-                  style={s.inputText}
-                  placeholder="Password"
-                  placeholderTextColor={C.outline}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  value={password}
-                  onChangeText={setPassword}
-                  editable={busy === null}
-                  onSubmitEditing={signInEmail}
-                  returnKeyType="go"
-                />
-              </View>
+              {emailMode !== 'forgot' ? (
+                <View style={s.input}>
+                  <MaterialIcons name="lock-outline" size={18} color={C.muted} />
+                  <TextInput
+                    style={s.inputText}
+                    placeholder={emailMode === 'register' ? 'Password (8+ characters)' : 'Password'}
+                    placeholderTextColor={C.outline}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoComplete={emailMode === 'register' ? 'new-password' : 'current-password'}
+                    value={password}
+                    onChangeText={setPassword}
+                    editable={busy === null}
+                    onSubmitEditing={emailMode === 'signin' ? signInEmail : undefined}
+                    returnKeyType={emailMode === 'signin' ? 'go' : 'next'}
+                  />
+                </View>
+              ) : null}
+              {emailMode === 'register' ? (
+                <View style={s.input}>
+                  <MaterialIcons name="lock-outline" size={18} color={C.muted} />
+                  <TextInput style={s.inputText} placeholder="Repeat password" placeholderTextColor={C.outline} secureTextEntry autoCapitalize="none" autoComplete="new-password" value={confirm} onChangeText={setConfirm} editable={busy === null} onSubmitEditing={createAccount} returnKeyType="go" />
+                </View>
+              ) : null}
+              {notice ? <Text style={s.emailNotice}>{notice}</Text> : null}
               <Pressable
                 accessibilityRole="button"
                 disabled={busy !== null}
-                onPress={signInEmail}
+                onPress={emailMode === 'register' ? createAccount : emailMode === 'forgot' ? sendReset : signInEmail}
                 style={({ pressed }) => [s.emailBtn, pressed && s.pressed, busy !== null && s.disabled]}
               >
-                {busy === 'email' ? <ActivityIndicator color={C.text} /> : <Text style={s.emailBtnText}>Sign In</Text>}
+                {busy === 'email' ? (
+                  <ActivityIndicator color={C.text} />
+                ) : (
+                  <Text style={s.emailBtnText}>{emailMode === 'register' ? 'Create account' : emailMode === 'forgot' ? 'Email me a reset link' : 'Sign In'}</Text>
+                )}
               </Pressable>
-              <Pressable onPress={() => setEmailMode(false)} style={s.emailBack}>
+              {emailMode === 'signin' ? (
+                <View style={s.emailRow}>
+                  <Pressable onPress={() => switchMode('forgot')} style={s.emailBack}>
+                    <Text style={s.emailLinkText}>Forgot password?</Text>
+                  </Pressable>
+                  <Pressable onPress={() => switchMode('register')} style={s.emailBack}>
+                    <Text style={s.emailLinkText}>Create account</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={() => switchMode('signin')} style={s.emailBack}>
+                  <Text style={s.emailLinkText}>{emailMode === 'register' ? 'I already have an account' : 'Back to sign in'}</Text>
+                </Pressable>
+              )}
+              <Pressable onPress={() => switchMode('off')} style={s.emailBack}>
                 <Text style={s.emailBackText}>Use social sign-in instead</Text>
               </Pressable>
             </View>
@@ -345,6 +425,11 @@ const s = StyleSheet.create({
   emailWrap: { marginTop: 4 },
   emailToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
   emailToggleText: { color: C.muted, fontSize: 13, fontWeight: '600' },
+  emailLinks: { flexDirection: 'row', justifyContent: 'center', gap: 18 },
+  emailTitle: { color: C.text, fontSize: 16, fontWeight: '800', textAlign: 'center', marginTop: 14, marginBottom: 2 },
+  emailRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  emailLinkText: { color: C.text, fontSize: 13, fontWeight: '700' },
+  emailNotice: { color: '#28C76F', fontSize: 13, lineHeight: 18 },
   emailForm: { gap: 10 },
   input: { height: 48, borderRadius: 12, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
   inputText: { flex: 1, color: C.text, fontSize: 15, paddingVertical: 0 },

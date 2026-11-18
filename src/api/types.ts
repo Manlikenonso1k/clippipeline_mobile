@@ -35,6 +35,8 @@ export interface User {
   name: string;
   email: string | null;
   avatar: string | null;
+  /** §18: false for Google/Facebook/TikTok accounts that never set a password. */
+  has_password?: boolean;
 }
 
 // ---- §9 Mobile sign-in broker ----

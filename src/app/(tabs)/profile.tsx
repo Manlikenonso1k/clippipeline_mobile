@@ -19,7 +19,7 @@ import Animated, {
 import { BottomTabInset } from '@/constants/theme';
 import { errorText } from '@/api/client';
 import { WEB_BASE_URL } from '@/api/config';
-import { queryClient, useDeleteMe, useFlags, useIsGuest, useMe, useOverview, useSocialAccounts, useUpdateMe, useUpdatePreferences } from '@/api/hooks';
+import { queryClient, useChangePassword, useDeleteMe, useFlags, useIsGuest, useMe, useOverview, useSocialAccounts, useUpdateMe, useUpdatePreferences } from '@/api/hooks';
 import type { Period, Platform, PlanName } from '@/api/types';
 import { PLATFORMS } from '@/api/types';
 import { PLATFORM_LABEL } from '@/components/post-utils';
@@ -81,7 +81,12 @@ const parseTags = (raw: string) => [...new Set(raw.split(/[\s,]+/).map((t) => t.
 
 export default function ProfileScreen() {
   const [plansOpen, setPlansOpen] = useState(false);
-  const [sheet, setSheet] = useState<'name' | 'defaults' | 'export' | 'delete' | null>(null);
+  const [sheet, setSheet] = useState<'name' | 'defaults' | 'export' | 'delete' | 'password' | null>(null);
+  const changePassword = useChangePassword();
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwRepeat, setPwRepeat] = useState('');
+  const [pwDone, setPwDone] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [tagsDraft, setTagsDraft] = useState('');
   const [platformsDraft, setPlatformsDraft] = useState<Platform[]>([]);
@@ -540,6 +545,21 @@ export default function ProfileScreen() {
         {/* Account */}
         <Section label="Account">
           <Row icon="edit" title="Edit Profile" subtitle={user?.name ? `Name: ${user.name}` : 'Change your display name'} onPress={openNameSheet} chevron />
+          <Row
+            icon="lock"
+            title={user?.has_password === false ? 'Set a Password' : 'Change Password'}
+            subtitle={user?.has_password === false ? 'Also sign in with your email, not just Google' : 'Keep your account secure'}
+            onPress={() => {
+              if (!requireAccount('Sign in to change your password.')) return;
+              setPwCurrent('');
+              setPwNew('');
+              setPwRepeat('');
+              setPwDone(false);
+              setSheetError(null);
+              setSheet('password');
+            }}
+            chevron
+          />
           <Divider />
           <Row
             icon="delete-forever"
@@ -596,6 +616,45 @@ export default function ProfileScreen() {
           onPress={() =>
             updateMe.mutate({ name: nameDraft.trim() }, { onSuccess: closeSheet, onError: (e) => setSheetError(errorText(e)) })
           }
+        />
+      </Sheet>
+
+      {/* §18 — change / set password */}
+      <Sheet visible={sheet === 'password'} onClose={closeSheet} title={user?.has_password === false ? 'Set a password' : 'Change password'}>
+        {user?.has_password !== false ? (
+          <>
+            <SheetLabel>Current password</SheetLabel>
+            <SheetInput value={pwCurrent} onChangeText={setPwCurrent} secureTextEntry autoCapitalize="none" autoComplete="current-password" placeholder="Current password" />
+          </>
+        ) : (
+          <SheetText>You signed up with Google, Facebook or TikTok. Set a password to also sign in with your email.</SheetText>
+        )}
+        <SheetLabel>New password</SheetLabel>
+        <SheetInput value={pwNew} onChangeText={setPwNew} secureTextEntry autoCapitalize="none" autoComplete="new-password" placeholder="At least 8 characters" />
+        <SheetLabel>Repeat new password</SheetLabel>
+        <SheetInput value={pwRepeat} onChangeText={setPwRepeat} secureTextEntry autoCapitalize="none" autoComplete="new-password" placeholder="Repeat it" />
+        {sheetError ? <InlineMessage tone="danger" icon="error-outline" text={sheetError} /> : null}
+        {pwDone ? <InlineMessage icon="check-circle" text="Password updated. Use it next time you sign in." /> : null}
+        <SheetButton
+          tone="primary"
+          label="Save password"
+          disabled={pwNew.length < 8 || pwNew !== pwRepeat || (user?.has_password !== false && !pwCurrent)}
+          loading={changePassword.isPending}
+          onPress={() => {
+            setSheetError(null);
+            changePassword.mutate(
+              { current_password: user?.has_password !== false ? pwCurrent : undefined, password: pwNew, password_confirmation: pwRepeat },
+              {
+                onSuccess: () => {
+                  setPwDone(true);
+                  setPwCurrent('');
+                  setPwNew('');
+                  setPwRepeat('');
+                },
+                onError: (e) => setSheetError(errorText(e)),
+              },
+            );
+          }}
         />
       </Sheet>
 

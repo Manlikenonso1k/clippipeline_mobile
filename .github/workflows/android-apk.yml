@@ -73,6 +73,18 @@ jobs:
           name: ${{ steps.apk.outputs.name }}
           path: ${{ steps.apk.outputs.name }}
 
+      - name: Release notes
+        run: |
+          {
+            cat docs/RELEASE_NOTES.md
+            echo
+            echo "---"
+            echo "Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA}."
+            echo
+            echo "**Install:** download the \`.apk\` below on your Android phone and open it (allow \"Install unknown apps\" for your browser)."
+            echo "This APK is signed with a CI key, not your EAS key: uninstall an EAS build of ClipPipeline first or Android will refuse the update."
+          } > release-body.md
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -81,9 +93,4 @@ jobs:
           name: ClipPipeline Studio (build ${{ steps.apk.outputs.vc }}, run ${{ github.run_number }})
           prerelease: true
           files: ${{ steps.apk.outputs.name }}
-          body: |
-            Android APK built from `${{ github.ref_name }}` at ${{ github.sha }}.
-
-            **Install:** download the `.apk` below on your Android phone and open it (allow "Install unknown apps" for your browser).
-
-            This APK is signed with a CI key, not your EAS key. If an EAS build of ClipPipeline is already installed, uninstall it first or Android will refuse the update.
+          body_path: release-body.md

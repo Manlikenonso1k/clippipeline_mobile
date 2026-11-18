@@ -785,3 +785,16 @@ export function useRemakeExpress() {
     setProject,
   );
 }
+
+// ---------------- §18 Email accounts ----------------
+
+// PUT /me/password — current_password is required only when the account already has a password.
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: async (input: { current_password?: string; password: string; password_confirmation: string }) => {
+      requireToken();
+      return apiFetch<{ message: string; has_password: boolean }>('/me/password', { method: 'PUT', body: JSON.stringify(input) });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.me }),
+  });
+}
